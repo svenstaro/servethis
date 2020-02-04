@@ -145,8 +145,8 @@ fn build_unauthorized_response(
     if log_error_chain {
         errors::log_error_chain(error.to_string());
     }
-    let return_path = match &req.state().random_route {
-        Some(random_route) => format!("/{}", random_route),
+    let return_path = match &req.state().path_prefix {
+        Some(path_prefix) => format!("/{}", path_prefix),
         None => "/".to_string(),
     };
 

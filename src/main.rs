@@ -45,8 +45,8 @@ pub struct MiniserveConfig {
     /// Enable symlink resolution
     pub no_symlinks: bool,
 
-    /// Enable random route generation
-    pub random_route: Option<String>,
+    /// Enable URL path prefix
+    pub path_prefix: Option<String>,
 
     /// Default color scheme
     pub default_color_scheme: themes::ColorScheme,
@@ -169,12 +169,10 @@ fn run() -> Result<(), ContextualError> {
                 .bold()
         ));
 
-        if let Some(random_route) = miniserve_config.clone().random_route {
+        if let Some(path_prefix) = miniserve_config.clone().path_prefix {
             addresses.push_str(&format!(
                 "{}",
-                Color::Green
-                    .paint(format!("/{random_route}", random_route = random_route,))
-                    .bold()
+                Color::Green.paint(format!("/{}", path_prefix)).bold()
             ));
         }
     }
@@ -234,11 +232,11 @@ fn configure_app(app: App<MiniserveConfig>) -> App<MiniserveConfig> {
     let s = {
         let path = &app.state().path;
         let no_symlinks = app.state().no_symlinks;
-        let random_route = app.state().random_route.clone();
+        let path_prefix = app.state().path_prefix.clone();
         let default_color_scheme = app.state().default_color_scheme;
         let file_upload = app.state().file_upload;
-        upload_route = if let Some(random_route) = app.state().random_route.clone() {
-            format!("/{}/upload", random_route)
+        upload_route = if let Some(path_prefix) = app.state().path_prefix.clone() {
+            format!("/{}/upload", path_prefix)
         } else {
             "/upload".to_string()
         };
@@ -256,7 +254,7 @@ fn configure_app(app: App<MiniserveConfig>) -> App<MiniserveConfig> {
                             req,
                             no_symlinks,
                             file_upload,
-                            random_route.clone(),
+                            path_prefix.clone(),
                             default_color_scheme,
                             u_r.clone(),
                         )
@@ -266,8 +264,8 @@ fn configure_app(app: App<MiniserveConfig>) -> App<MiniserveConfig> {
         }
     };
 
-    let random_route = app.state().random_route.clone().unwrap_or_default();
-    let full_route = format!("/{}", random_route);
+    let path_prefix = app.state().path_prefix.clone().unwrap_or_default();
+    let full_route = format!("/{}", path_prefix);
 
     if let Some(s) = s {
         if app.state().file_upload {
@@ -295,8 +293,8 @@ fn configure_app(app: App<MiniserveConfig>) -> App<MiniserveConfig> {
 fn error_404(req: &HttpRequest<crate::MiniserveConfig>) -> Result<HttpResponse, io::Error> {
     let err_404 = ContextualError::RouteNotFoundError(req.path().to_string());
     let default_color_scheme = req.state().default_color_scheme;
-    let return_address = match &req.state().random_route {
-        Some(random_route) => format!("/{}", random_route),
+    let return_address = match &req.state().path_prefix {
+        Some(path_prefix) => format!("/{}", path_prefix),
         None => "/".to_string(),
     };
 
