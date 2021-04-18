@@ -342,7 +342,7 @@ async fn run(miniserve_config: MiniserveConfig) -> Result<(), ContextualError> {
         }
     };
 
-    let srv = actix_web::HttpServer::new(move || {
+    let mut srv = actix_web::HttpServer::new(move || {
         App::new()
             .wrap(configure_header(&inside_config.clone()))
             .app_data(inside_config.clone())
@@ -358,11 +358,13 @@ async fn run(miniserve_config: MiniserveConfig) -> Result<(), ContextualError> {
             .route(&format!("/{}", inside_config.css_route), web::get().to(css))
             .configure(|c| configure_app(c, &inside_config))
             .default_service(web::get().to(error_404))
-    })
-    .bind(socket_addresses.as_slice())
-    .map_err(|e| ContextualError::IoError("Failed to bind server".to_string(), e))?
-    .shutdown_timeout(0)
-    .run();
+    });
+    for addr in &socket_addresses {
+        srv = srv.bind(addr).map_err(|e| {
+            ContextualError::IoError(format!("Failed to bind server to {}", addr), e)
+        })?;
+    }
+    let srv = srv.shutdown_timeout(0).run();
 
     println!(
         "Serving path {path} at {addresses}",
