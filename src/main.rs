@@ -317,30 +317,11 @@ async fn run(miniserve_config: MiniserveConfig) -> Result<(), ContextualError> {
         }
     }
 
-    let socket_addresses = interfaces
+    let socket_addresses = miniserve_config
+        .interfaces
         .iter()
-        .map(|interface| {
-            format!(
-                "{interface}:{port}",
-                interface = &interface,
-                port = miniserve_config.port,
-            )
-            .parse::<SocketAddr>()
-        })
-        .collect::<Result<Vec<SocketAddr>, _>>();
-
-    let socket_addresses = match socket_addresses {
-        Ok(addresses) => addresses,
-        Err(e) => {
-            // Note that this should never fail, since CLI parsing succeeded
-            // This means the format of each IP address is valid, and so is the port
-            // Valid IpAddr + valid port == valid SocketAddr
-            return Err(ContextualError::ParseError(
-                "string as socket address".to_string(),
-                e.to_string(),
-            ));
-        }
-    };
+        .map(|&interface| SocketAddr::new(interface, miniserve_config.port))
+        .collect::<Vec<SocketAddr>>();
 
     let mut srv = actix_web::HttpServer::new(move || {
         App::new()
