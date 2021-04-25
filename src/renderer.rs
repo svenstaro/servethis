@@ -87,7 +87,7 @@ pub fn page(
                                 // wrapped in span so the text doesn't shift slightly when it turns into a link
                                 span { bdi { (el.name) } }
                             } @else {
-                                a href=(parametrized_link(&el.link, sort_method, sort_order)) {
+                                a href=(parametrized_link(&el.link, sort_method, sort_order, false)) {
                                     bdi { (el.name) }
                                 }
                             }
@@ -127,22 +127,62 @@ pub fn page(
                                 tr {
                                     td colspan="3" {
                                         span.root-chevron { (chevron_left()) }
-                                        a.root href=(parametrized_link("../", sort_method, sort_order)) {
+                                        a.root href=(parametrized_link("../", sort_method, sort_order, false)) {
                                             "Parent directory"
                                         }
                                     }
                                 }
                             }
                             @for entry in entries {
-                                (entry_row(entry, sort_method, sort_order))
+                                (entry_row(entry, sort_method, sort_order, false))
                             }
                         }
                     }
                     a.back href="#top" {
                         (arrow_up())
                     }
-                    @if !hide_version_footer {
-                        (version_footer())
+                    div.footer {
+                        (wget_download(&title_path))
+                        @if !hide_version_footer {
+                            (version_footer())
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+/// Renders the file listing
+#[allow(clippy::too_many_arguments)]
+pub fn raw(
+    entries: Vec<Entry>,
+    is_root: bool,
+    sort_method: Option<SortingMethod>,
+    sort_order: Option<SortingOrder>,
+) -> Markup {
+    html! {
+        (DOCTYPE)
+        html {
+            body {
+                table {
+                    thead {
+                        th.name { "Name" }
+                        th.size { "Size" }
+                        th.date { "Last modification" }
+                    }
+                    tbody {
+                        @if !is_root {
+                            tr {
+                                td colspan="3" {
+                                    a.root href=(parametrized_link("../", sort_method, sort_order, true)) {
+                                        ".."
+                                    }
+                                }
+                            }
+                        }
+                        @for entry in entries {
+                            (entry_row(entry, sort_method, sort_order, true))
+                        }
                     }
                 }
             }
@@ -153,10 +193,28 @@ pub fn page(
 // Partial: version footer
 fn version_footer() -> Markup {
     html! {
-        p.footer {
-            (format!("{}/{}", crate_name!(), crate_version!()))
-        }
+       div.version {
+           (format!("{}/{}", crate_name!(), crate_version!()))
+       }
     }
+}
+
+fn wget_download(title_path: &str) -> Markup {
+    let count = {
+        let count_slashes = title_path.matches('/').count();
+        if count_slashes > 0 {
+            count_slashes - 1
+        } else {
+            0
+        }
+    };    
+
+    return html! {
+        div.downloadWget {
+            p { "Download folder:" }
+            div.cmd { (format!("wget -r -c -nH -np --cut-dirs={} -R \"index.html*\" \"http://{}/?raw=true\"", count, title_path)) }
+        }
+    };
 }
 
 /// Build the action of the upload form
@@ -239,7 +297,7 @@ fn archive_button(
     } else {
         format!(
             "{}&download={}",
-            parametrized_link("", sort_method, sort_order,),
+            parametrized_link("", sort_method, sort_order, false),
             archive_method
         )
     };
@@ -267,14 +325,23 @@ fn parametrized_link(
     link: &str,
     sort_method: Option<SortingMethod>,
     sort_order: Option<SortingOrder>,
+    raw: bool
 ) -> String {
+    if raw == true {
+        return format!(
+            "{}?raw=true",
+            make_link_with_trailing_slash(&link),
+        );
+    }
+    
     if let Some(method) = sort_method {
         if let Some(order) = sort_order {
             let parametrized_link = format!(
-                "{}?sort={}&order={}",
+                "{}?sort={}&order={}{}",
                 make_link_with_trailing_slash(&link),
                 method,
-                order
+                order,
+                if raw == true { "&raw=true" } else { "" }
             );
 
             return parametrized_link;
@@ -322,13 +389,14 @@ fn entry_row(
     entry: Entry,
     sort_method: Option<SortingMethod>,
     sort_order: Option<SortingOrder>,
+    raw: bool
 ) -> Markup {
     html! {
         tr {
             td {
                 p {
                     @if entry.is_dir() {
-                        a.directory href=(parametrized_link(&entry.link, sort_method, sort_order)) {
+                        a.directory href=(parametrized_link(&entry.link, sort_method, sort_order, raw)) {
                             (entry.name) "/"
                             @if entry.is_symlink {
                                 span.symlink-symbol { }
@@ -342,9 +410,11 @@ fn entry_row(
                                     span.symlink-symbol { }
                                 }
                             }
-                            @if let Some(size) = entry.size {
-                                span.mobile-info.size {
-                                    (size)
+                            @if raw == false {
+                                @if let Some(size) = entry.size {
+                                    span.mobile-info.size {
+                                        (size)
+                                    }
                                 }
                             }
                         }
@@ -487,7 +557,7 @@ pub fn render_error(
     let link = if has_referer {
         return_address.to_string()
     } else {
-        parametrized_link(return_address, sort_method, sort_order)
+        parametrized_link(return_address, sort_method, sort_order, false)
     };
 
     html! {
@@ -511,7 +581,9 @@ pub fn render_error(
                         }
                     }
                     @if !hide_version_footer {
-                        (version_footer())
+                        p.footer {
+                            (version_footer())
+                        }
                     }
                 }
             }

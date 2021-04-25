@@ -33,6 +33,7 @@ pub struct QueryParameters {
     pub path: Option<PathBuf>,
     pub sort: Option<SortingMethod>,
     pub order: Option<SortingOrder>,
+    pub raw: Option<bool>,
     qrcode: Option<String>,
     download: Option<ArchiveMethod>,
 }
@@ -238,7 +239,7 @@ pub fn directory_listing(
     };
 
     let query_params = extract_query_parameters(req);
-
+    
     // If the `qrcode` parameter is included in the url, then should respond to the QR code
     if let Some(url) = query_params.qrcode {
         let res = match QrCode::encode_text(&url, QrCodeEcc::Medium) {
@@ -405,26 +406,35 @@ pub fn directory_listing(
             HttpResponse::Ok()
                 .content_type("text/html; charset=utf-8")
                 .body(
-                    renderer::page(
-                        entries,
-                        is_root,
-                        query_params.sort,
-                        query_params.order,
-                        show_qrcode,
-                        file_upload,
-                        &upload_route,
-                        &favicon_route,
-                        &css_route,
-                        default_color_scheme,
-                        default_color_scheme_dark,
-                        &encoded_dir,
-                        breadcrumbs,
-                        tar_enabled,
-                        tar_gz_enabled,
-                        zip_enabled,
-                        hide_version_footer,
-                    )
-                    .into_string(),
+                    if query_params.raw.is_some() && query_params.raw.unwrap() == true {
+                        renderer::raw(
+                            entries,
+                            is_root,
+                            query_params.sort,
+                            query_params.order,
+                        )
+
+                    } else {
+                        renderer::page(
+                            entries,
+                            is_root,
+                            query_params.sort,
+                            query_params.order,
+                            show_qrcode,
+                            file_upload,
+                            &upload_route,
+                            &favicon_route,
+                            &css_route,
+                            default_color_scheme,
+                            default_color_scheme_dark,
+                            &encoded_dir,
+                            breadcrumbs,
+                            tar_enabled,
+                            tar_gz_enabled,
+                            zip_enabled,
+                            hide_version_footer,
+                        )
+                    }.into_string(),
                 ),
         ))
     }
@@ -436,6 +446,7 @@ pub fn extract_query_parameters(req: &HttpRequest) -> QueryParameters {
             sort: query.sort,
             order: query.order,
             download: query.download,
+            raw: query.raw,
             qrcode: query.qrcode.to_owned(),
             path: query.path.clone(),
         },
@@ -446,6 +457,7 @@ pub fn extract_query_parameters(req: &HttpRequest) -> QueryParameters {
                 sort: None,
                 order: None,
                 download: None,
+                raw: None,
                 qrcode: None,
                 path: None,
             }
