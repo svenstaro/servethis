@@ -335,18 +335,17 @@ fn parametrized_link(
     sort_order: Option<SortingOrder>,
     raw: bool,
 ) -> String {
-    if raw == true {
+    if !raw {
         return format!("{}?raw=true", make_link_with_trailing_slash(&link),);
     }
 
     if let Some(method) = sort_method {
         if let Some(order) = sort_order {
             let parametrized_link = format!(
-                "{}?sort={}&order={}{}",
+                "{}?sort={}&order={}",
                 make_link_with_trailing_slash(&link),
                 method,
                 order,
-                if raw == true { "&raw=true" } else { "" }
             );
 
             return parametrized_link;
@@ -415,7 +414,7 @@ fn entry_row(
                                     span.symlink-symbol { }
                                 }
                             }
-                            @if raw == false {
+                            @if !raw {
                                 @if let Some(size) = entry.size {
                                     span.mobile-info.size {
                                         (size)
