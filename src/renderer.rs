@@ -7,8 +7,8 @@ use structopt::clap::{crate_name, crate_version};
 use strum::IntoEnumIterator;
 
 use crate::archive::ArchiveMethod;
-use crate::listing::{Breadcrumb, Entry, SortingMethod, SortingOrder};
 use crate::auth::CurrentUser;
+use crate::listing::{Breadcrumb, Entry, SortingMethod, SortingOrder};
 
 /// Renders the file listing
 #[allow(clippy::too_many_arguments)]
@@ -30,7 +30,7 @@ pub fn page(
     tar_gz_enabled: bool,
     zip_enabled: bool,
     hide_version_footer: bool,
-    current_user: Option<&CurrentUser>
+    current_user: Option<&CurrentUser>,
 ) -> Markup {
     let upload_action = build_upload_action(upload_route, encoded_dir, sort_method, sort_order);
 

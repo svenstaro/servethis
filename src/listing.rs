@@ -13,9 +13,9 @@ use std::time::SystemTime;
 use strum_macros::{Display, EnumString};
 
 use crate::archive::ArchiveMethod;
+use crate::auth::CurrentUser;
 use crate::errors::{self, ContextualError};
 use crate::renderer;
-use crate::auth::CurrentUser;
 use percent_encode_sets::PATH_SEGMENT;
 
 /// "percent-encode sets" as defined by WHATWG specs:
@@ -172,10 +172,9 @@ pub fn directory_listing(
     hide_version_footer: bool,
     title: Option<String>,
 ) -> Result<ServiceResponse, io::Error> {
-    
     let extensions = req.extensions();
     let current_user: Option<&CurrentUser> = extensions.get::<CurrentUser>();
-    
+
     use actix_web::dev::BodyEncoding;
     let serve_path = req.path();
 
@@ -432,7 +431,7 @@ pub fn directory_listing(
                             tar_gz_enabled,
                             zip_enabled,
                             hide_version_footer,
-                            current_user
+                            current_user,
                         )
                     }
                     .into_string(),

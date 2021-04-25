@@ -73,7 +73,7 @@ pub fn get_hash<T: Digest>(text: &str) -> Vec<u8> {
 }
 
 pub struct CurrentUser {
-    pub name: String
+    pub name: String,
 }
 
 pub async fn handle_auth(req: ServiceRequest, cred: BasicAuth) -> Result<ServiceRequest> {
@@ -83,8 +83,10 @@ pub async fn handle_auth(req: ServiceRequest, cred: BasicAuth) -> Result<Service
 
     let cred_params: BasicAuthParams = cred.into();
     if match_auth(&cred_params, required_auth) {
-        req.extensions_mut().insert(CurrentUser { name: cred_params.username });
-        
+        req.extensions_mut().insert(CurrentUser {
+            name: cred_params.username,
+        });
+
         Ok(ServiceRequest::from_parts(req, pl).unwrap_or_else(|_| unreachable!()))
     } else {
         Err(HttpResponse::Unauthorized()
