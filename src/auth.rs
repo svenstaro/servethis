@@ -205,7 +205,7 @@ mod tests {
     ) {
         assert_eq!(
             match_auth(
-                BasicAuthParams {
+                &BasicAuthParams {
                     username: param_username.to_owned(),
                     password: param_password.to_owned(),
                 },
@@ -246,7 +246,7 @@ mod tests {
         password: &str,
     ) {
         assert!(match_auth(
-            BasicAuthParams {
+            &BasicAuthParams {
                 username: username.to_owned(),
                 password: password.to_owned(),
             },
@@ -257,7 +257,7 @@ mod tests {
     #[rstest]
     fn test_multiple_auth_wrong_username(account_sample: Vec<RequiredAuth>) {
         assert_eq!(match_auth(
-            BasicAuthParams {
+            &BasicAuthParams {
                 username: "unregistered user".to_owned(),
                 password: "pwd0".to_owned(),
             },
@@ -280,7 +280,7 @@ mod tests {
         password: &str,
     ) {
         assert_eq!(match_auth(
-            BasicAuthParams {
+            &BasicAuthParams {
                 username: username.to_owned(),
                 password: password.to_owned(),
             },

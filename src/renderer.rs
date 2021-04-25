@@ -212,7 +212,7 @@ fn wget_download(title_path: &str, current_user: Option<&CurrentUser>) -> Markup
     };
 
     let user_params = if let Some(user) = current_user {
-        format!("--ask-password --user {}", user.name)
+        format!(" --ask-password --user {}", user.name)
     } else {
         "".to_string()
     };
@@ -220,7 +220,7 @@ fn wget_download(title_path: &str, current_user: Option<&CurrentUser>) -> Markup
     return html! {
         div.downloadWget {
             p { "Download folder:" }
-            div.cmd { (format!("wget -r -c -nH -np --cut-dirs={} -R \"index.html*\" {} \"http://{}/?raw=true\"", count, user_params, title_path)) }
+            div.cmd { (format!("wget -r -c -nH -np --cut-dirs={} -R \"index.html*\"{} \"http://{}/?raw=true\"", count, user_params, title_path)) }
         }
     };
 }
