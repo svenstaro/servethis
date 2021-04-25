@@ -207,7 +207,7 @@ fn wget_download(title_path: &str) -> Markup {
         } else {
             0
         }
-    };    
+    };
 
     return html! {
         div.downloadWget {
@@ -325,15 +325,12 @@ fn parametrized_link(
     link: &str,
     sort_method: Option<SortingMethod>,
     sort_order: Option<SortingOrder>,
-    raw: bool
+    raw: bool,
 ) -> String {
     if raw == true {
-        return format!(
-            "{}?raw=true",
-            make_link_with_trailing_slash(&link),
-        );
+        return format!("{}?raw=true", make_link_with_trailing_slash(&link),);
     }
-    
+
     if let Some(method) = sort_method {
         if let Some(order) = sort_order {
             let parametrized_link = format!(
@@ -389,7 +386,7 @@ fn entry_row(
     entry: Entry,
     sort_method: Option<SortingMethod>,
     sort_order: Option<SortingOrder>,
-    raw: bool
+    raw: bool,
 ) -> Markup {
     html! {
         tr {

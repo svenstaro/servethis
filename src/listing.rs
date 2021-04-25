@@ -239,7 +239,7 @@ pub fn directory_listing(
     };
 
     let query_params = extract_query_parameters(req);
-    
+
     // If the `qrcode` parameter is included in the url, then should respond to the QR code
     if let Some(url) = query_params.qrcode {
         let res = match QrCode::encode_text(&url, QrCodeEcc::Medium) {
@@ -407,13 +407,7 @@ pub fn directory_listing(
                 .content_type("text/html; charset=utf-8")
                 .body(
                     if query_params.raw.is_some() && query_params.raw.unwrap() == true {
-                        renderer::raw(
-                            entries,
-                            is_root,
-                            query_params.sort,
-                            query_params.order,
-                        )
-
+                        renderer::raw(entries, is_root, query_params.sort, query_params.order)
                     } else {
                         renderer::page(
                             entries,
@@ -434,7 +428,8 @@ pub fn directory_listing(
                             zip_enabled,
                             hide_version_footer,
                         )
-                    }.into_string(),
+                    }
+                    .into_string(),
                 ),
         ))
     }
