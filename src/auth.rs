@@ -39,7 +39,7 @@ pub struct RequiredAuth {
 }
 
 /// Return `true` if `basic_auth` is matches any of `required_auth`
-pub fn match_auth(basic_auth: BasicAuthParams, required_auth: &[RequiredAuth]) -> bool {
+pub fn match_auth(basic_auth: &BasicAuthParams, required_auth: &[RequiredAuth]) -> bool {
     required_auth
         .iter()
         .any(|RequiredAuth { username, password }| {
@@ -72,11 +72,19 @@ pub fn get_hash<T: Digest>(text: &str) -> Vec<u8> {
     hasher.finalize().to_vec()
 }
 
+pub struct CurrentUser {
+    pub name: String
+}
+
 pub async fn handle_auth(req: ServiceRequest, cred: BasicAuth) -> Result<ServiceRequest> {
     let (req, pl) = req.into_parts();
+
     let required_auth = &req.app_data::<crate::MiniserveConfig>().unwrap().auth;
 
-    if match_auth(cred.into(), required_auth) {
+    let cred_params: BasicAuthParams = cred.into();
+    if match_auth(&cred_params, required_auth) {
+        req.extensions_mut().insert(CurrentUser { name: cred_params.username });
+        
         Ok(ServiceRequest::from_parts(req, pl).unwrap_or_else(|_| unreachable!()))
     } else {
         Err(HttpResponse::Unauthorized()
