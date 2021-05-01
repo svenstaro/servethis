@@ -81,6 +81,13 @@ pub struct MiniserveConfig {
     /// However, if a directory contains this file, miniserve will serve that file instead.
     pub index: Option<std::path::PathBuf>,
 
+    /// The index file of a single page application
+    ///
+    /// If this option is set, miniserve will serve the specified file instead of a 404 page when
+    /// a non-existent path is requested. This is intended for single-page applications where
+    /// routing takes place on the client side.
+    pub spa_index: Option<std::path::PathBuf>,
+
     /// Enable QR code display
     pub show_qrcode: bool,
 
@@ -145,6 +152,9 @@ impl MiniserveConfig {
             _ => args.port,
         };
 
+        // If spa_index is set but index is unset, copy the former into the latter
+        let index = args.index.or(args.spa_index.clone());
+
         crate::MiniserveConfig {
             verbose: args.verbose,
             path: args.path.unwrap_or_else(|| PathBuf::from(".")),
@@ -159,7 +169,8 @@ impl MiniserveConfig {
             css_route,
             default_color_scheme,
             default_color_scheme_dark,
-            index: args.index,
+            index,
+            spa_index: args.spa_index,
             overwrite_files: args.overwrite_files,
             show_qrcode: args.qrcode,
             file_upload: args.file_upload,
@@ -254,15 +265,9 @@ async fn run(miniserve_config: MiniserveConfig) -> Result<(), ContextualError> {
         ContextualError::IoError("Failed to resolve path to be served".to_string(), e)
     })?;
 
-    if let Some(index_path) = &miniserve_config.index {
-        let has_index: std::path::PathBuf = [&canon_path, index_path].iter().collect();
-        if !has_index.exists() {
-            error!(
-                "The file '{}' provided for option --index could not be found.",
-                index_path.to_string_lossy()
-            );
-        }
-    }
+    check_file_exists(&canon_path, &miniserve_config.index, "index");
+    check_file_exists(&canon_path, &miniserve_config.spa_index, "spa-index");
+
     let path_string = canon_path.to_string_lossy();
 
     println!(
@@ -382,6 +387,19 @@ async fn run(miniserve_config: MiniserveConfig) -> Result<(), ContextualError> {
         .map_err(|e| ContextualError::IoError("".to_owned(), e))
 }
 
+fn check_file_exists(canon_path: &PathBuf, file_option: &Option<PathBuf>, option_name: &str) {
+    if let Some(file_path) = file_option {
+        let has_file: std::path::PathBuf = [&canon_path, file_path].iter().collect();
+        if !has_file.exists() {
+            error!(
+                "The file '{}' provided for option --{} could not be found.",
+                file_path.to_string_lossy(),
+                option_name,
+            );
+        }
+    }
+}
+
 fn configure_header(conf: &MiniserveConfig) -> middleware::DefaultHeaders {
     let headers = conf.clone().header;
 
@@ -428,8 +446,27 @@ fn configure_app(app: &mut web::ServiceConfig, conf: &MiniserveConfig) {
         if path.is_file() {
             None
         } else if let Some(index_file) = &conf.index {
+            let mut path = actix_files::Files::new(&full_route, path).index_file(index_file.to_string_lossy());
+            
+            if let Some(spa_index_file) = &conf.spa_index {
+                let spa_index_string: String = spa_index_file.to_string_lossy().into();
+
+                path = path.default_handler(move |req: actix_web::dev::ServiceRequest| {
+                    let (request, _payload) = req.into_parts();
+                    let spa_index_string = spa_index_string.clone();
+
+                    async move {
+                        let response = actix_files::NamedFile::open(
+                            &spa_index_string
+                        )?
+                            .into_response(&request)?;
+                        Ok(actix_web::dev::ServiceResponse::new(request, response))
+                    }
+                });
+            }
+
             Some(
-                actix_files::Files::new(&full_route, path).index_file(index_file.to_string_lossy()),
+                path
             )
         } else {
             let u_r = upload_route.clone();
