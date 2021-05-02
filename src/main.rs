@@ -446,12 +446,13 @@ fn configure_app(app: &mut web::ServiceConfig, conf: &MiniserveConfig) {
         if path.is_file() {
             None
         } else if let Some(index_file) = &conf.index {
-            let mut path = actix_files::Files::new(&full_route, path).index_file(index_file.to_string_lossy());
+            let mut files = actix_files::Files::new(&full_route, path).index_file(index_file.to_string_lossy());
             
             if let Some(spa_index_file) = &conf.spa_index {
-                let spa_index_string: String = spa_index_file.to_string_lossy().into();
+                let spa_index_full = path.join(spa_index_file);
+                let spa_index_string: String = spa_index_full.to_string_lossy().into();
 
-                path = path.default_handler(move |req: actix_web::dev::ServiceRequest| {
+                files = files.default_handler(move |req: actix_web::dev::ServiceRequest| {
                     let (request, _payload) = req.into_parts();
                     let spa_index_string = spa_index_string.clone();
 
@@ -466,7 +467,7 @@ fn configure_app(app: &mut web::ServiceConfig, conf: &MiniserveConfig) {
             }
 
             Some(
-                path
+                files
             )
         } else {
             let u_r = upload_route.clone();
