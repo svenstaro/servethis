@@ -335,7 +335,7 @@ fn parametrized_link(
     sort_order: Option<SortingOrder>,
     raw: bool,
 ) -> String {
-    if !raw {
+    if raw {
         return format!("{}?raw=true", make_link_with_trailing_slash(&link),);
     }
 
