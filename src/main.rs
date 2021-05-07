@@ -1,5 +1,5 @@
 use std::io;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener};
 use std::thread;
 use std::time::Duration;
 use std::{io::Write, path::PathBuf};
@@ -340,10 +340,12 @@ async fn run(miniserve_config: MiniserveConfig) -> Result<(), ContextualError> {
             .configure(|c| configure_app(c, &inside_config))
             .default_service(web::get().to(error_404))
     });
-    for addr in &socket_addresses {
-        srv = srv.bind(addr).map_err(|e| {
-            ContextualError::IoError(format!("Failed to bind server to {}", addr), e)
-        })?;
+    for &addr in &socket_addresses {
+        let err_map = |e: io::Error| {
+            ContextualError::IoError(format!("Failed to bind server to {}", &addr), e)
+        };
+        let listener = create_tcp_listener(addr).map_err(err_map)?;
+        srv = srv.listen(listener).map_err(err_map)?;
     }
     let srv = srv.shutdown_timeout(0).run();
 
@@ -359,6 +361,19 @@ async fn run(miniserve_config: MiniserveConfig) -> Result<(), ContextualError> {
 
     srv.await
         .map_err(|e| ContextualError::IoError("".to_owned(), e))
+}
+
+/// Allows us to set low-level socket options
+fn create_tcp_listener(addr: SocketAddr) -> io::Result<TcpListener> {
+    use socket2::{Domain, Protocol, Socket, Type};
+    let socket = Socket::new(Domain::for_address(addr), Type::STREAM, Some(Protocol::TCP))?;
+    if addr.is_ipv6() {
+        socket.set_only_v6(true)?;
+    }
+    socket.set_reuse_address(true)?;
+    socket.bind(&addr.into())?;
+    socket.listen(1024 /* Default backlog */)?;
+    Ok(TcpListener::from(socket))
 }
 
 fn configure_header(conf: &MiniserveConfig) -> middleware::DefaultHeaders {
