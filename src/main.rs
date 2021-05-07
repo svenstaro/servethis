@@ -170,20 +170,17 @@ impl MiniserveConfig {
     }
 }
 
-fn main() {
+fn main() -> Result<(), ()> {
     let args = args::CliArgs::from_args();
 
     if let Some(shell) = args.print_completions {
         args::CliArgs::clap().gen_completions_to("miniserve", shell, &mut std::io::stdout());
-        return;
+        return Ok(());
     }
 
     let miniserve_config = MiniserveConfig::from_args(args);
 
-    match run(miniserve_config) {
-        Ok(()) => (),
-        Err(e) => errors::log_error_chain(e.to_string()),
-    }
+    run(miniserve_config).map_err(|e| errors::log_error_chain(e.to_string()))
 }
 
 #[actix_web::main(miniserve)]
