@@ -272,7 +272,7 @@ async fn run(miniserve_config: MiniserveConfig) -> Result<(), ContextualError> {
         }
     }
 
-    let addresses: String = {
+    let urls: Vec<String> = {
         let (mut ifaces, wildcard): (Vec<IpAddr>, Vec<IpAddr>) = miniserve_config
             .interfaces
             .clone()
@@ -305,14 +305,7 @@ async fn run(miniserve_config: MiniserveConfig) -> Result<(), ContextualError> {
                 Some(ref random_route) => format!("{}/{}", url, random_route),
                 None => url,
             })
-            .map(|url| Color::Green.paint(url).bold().to_string())
-            .fold(String::new(), |mut acc, url| {
-                if !acc.is_empty() {
-                    acc.push_str(", ");
-                }
-                acc.push_str(&url);
-                acc
-            })
+            .collect()
     };
 
     let socket_addresses = miniserve_config
@@ -347,11 +340,41 @@ async fn run(miniserve_config: MiniserveConfig) -> Result<(), ContextualError> {
     }
     let srv = srv.shutdown_timeout(0).run();
 
+    let formatted_urls = urls
+        .iter()
+        .map(|url| Color::Green.paint(url).bold().to_string())
+        .fold(String::new(), |mut acc, url| {
+            if !acc.is_empty() {
+                acc.push_str(", ");
+            }
+            acc.push_str(&url);
+            acc
+        });
+
     println!(
-        "Serving path {path} at {addresses}",
+        "Serving path {path} at {urls}",
         path = Color::Yellow.paint(path_string).bold(),
-        addresses = addresses,
+        urls = formatted_urls,
     );
+
+    if miniserve_config.show_qrcode {
+        for url in urls
+            .iter()
+            .filter(|url| !url.starts_with("http://127.0.0.1"))
+            .filter(|url| !url.starts_with("http://[::1]"))
+        {
+            use qrcode::{render::unicode::Dense1x2, EcLevel, QrCode};
+            let qrcode = match QrCode::with_error_correction_level(url.as_bytes(), EcLevel::L) {
+                Ok(qr) => qr.render::<Dense1x2>().build(),
+                Err(e) => {
+                    error!("Failed to render QR to terminal: {}", e);
+                    continue;
+                }
+            };
+            let url = Color::Green.paint(url).bold();
+            println!("\nQR code for {} :\n{}", url, qrcode);
+        }
+    }
 
     if atty::is(atty::Stream::Stdout) {
         println!("\nQuit by pressing CTRL-C");

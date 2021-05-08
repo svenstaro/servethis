@@ -5,7 +5,7 @@ use actix_web::web::Query;
 use actix_web::{HttpRequest, HttpResponse, Result};
 use bytesize::ByteSize;
 use percent_encoding::{percent_decode_str, utf8_percent_encode, AsciiSet, CONTROLS};
-use qrcodegen::{QrCode, QrCodeEcc};
+use qrcode::{render::svg, EcLevel, QrCode};
 use serde::Deserialize;
 use std::io;
 use std::path::{Component, Path, PathBuf};
@@ -234,10 +234,10 @@ pub fn directory_listing(
 
     // If the `qrcode` parameter is included in the url, then should respond to the QR code
     if let Some(url) = query_params.qrcode {
-        let res = match QrCode::encode_text(&url, QrCodeEcc::Medium) {
+        let res = match QrCode::with_error_correction_level(url.as_bytes(), EcLevel::L) {
             Ok(qr) => HttpResponse::Ok()
                 .header("Content-Type", "image/svg+xml")
-                .body(qr.to_svg_string(2)),
+                .body(qr.render::<svg::Color>().build()),
             Err(err) => {
                 log::error!("URL is too long: {:?}", err);
                 HttpResponse::UriTooLong().body(Body::Empty)

@@ -74,7 +74,7 @@ fn get_svg_qrcode(tmpdir: TempDir, port: u16) -> Result<(), Error> {
     assert_eq!(resp.headers()["Content-Type"], "image/svg+xml");
     let body = resp.text()?;
     assert!(body.starts_with("<?xml"));
-    assert_eq!(body.len(), 3530);
+    assert_eq!(body.len(), 4450);
 
     // Err
     let content: String = repeat_with(|| '0').take(8 * 1024).collect();
