@@ -4,7 +4,7 @@ use actix_web::http::StatusCode;
 use actix_web::web::Query;
 use actix_web::{HttpRequest, HttpResponse, Result};
 use bytesize::ByteSize;
-use percent_encoding::{percent_decode_str, utf8_percent_encode, AsciiSet, CONTROLS};
+use percent_encoding::{percent_decode_str, utf8_percent_encode};
 use qrcode::{render::svg, EcLevel, QrCode};
 use serde::Deserialize;
 use std::io;
@@ -12,11 +12,20 @@ use std::path::{Component, Path, PathBuf};
 use std::time::SystemTime;
 use strum_macros::{Display, EnumString};
 
-use crate::archive::CompressionMethod;
+use crate::archive::ArchiveMethod;
 use crate::errors::{self, ContextualError};
 use crate::renderer;
+use percent_encode_sets::PATH_SEGMENT;
 
-const FRAGMENT: &AsciiSet = &CONTROLS.add(b' ').add(b'"').add(b'<').add(b'>').add(b'`');
+/// "percent-encode sets" as defined by WHATWG specs:
+/// https://url.spec.whatwg.org/#percent-encoded-bytes
+mod percent_encode_sets {
+    use percent_encoding::{AsciiSet, CONTROLS};
+    const BASE: &AsciiSet = &CONTROLS.add(b'%');
+    pub const QUERY: &AsciiSet = &BASE.add(b' ').add(b'"').add(b'#').add(b'<').add(b'>');
+    pub const PATH: &AsciiSet = &QUERY.add(b'?').add(b'`').add(b'{').add(b'}');
+    pub const PATH_SEGMENT: &AsciiSet = &PATH.add(b'/');
+}
 
 /// Query parameters
 #[derive(Deserialize)]
@@ -25,7 +34,7 @@ pub struct QueryParameters {
     pub sort: Option<SortingMethod>,
     pub order: Option<SortingOrder>,
     qrcode: Option<String>,
-    download: Option<CompressionMethod>,
+    download: Option<ArchiveMethod>,
 }
 
 /// Available sorting methods
@@ -65,9 +74,6 @@ pub enum EntryType {
 
     /// Entry is a file
     File,
-
-    /// Entry is a symlink
-    Symlink,
 }
 
 /// Entry
@@ -77,6 +83,9 @@ pub struct Entry {
 
     /// Type of the entry
     pub entry_type: EntryType,
+
+    /// Entry is symlink. Not mutually exclusive with entry_type
+    pub is_symlink: bool,
 
     /// URL of the entry
     pub link: String,
@@ -92,6 +101,7 @@ impl Entry {
     fn new(
         name: String,
         entry_type: EntryType,
+        is_symlink: bool,
         link: String,
         size: Option<bytesize::ByteSize>,
         last_modification_date: Option<SystemTime>,
@@ -99,6 +109,7 @@ impl Entry {
         Entry {
             name,
             entry_type,
+            is_symlink,
             link,
             size,
             last_modification_date,
@@ -113,11 +124,6 @@ impl Entry {
     /// Returns wether the entry is a file
     pub fn is_file(&self) -> bool {
         self.entry_type == EntryType::File
-    }
-
-    /// Returns wether the entry is a symlink
-    pub fn is_symlink(&self) -> bool {
-        self.entry_type == EntryType::Symlink
     }
 }
 
@@ -158,6 +164,7 @@ pub fn directory_listing(
     show_qrcode: bool,
     upload_route: String,
     tar_enabled: bool,
+    tar_gz_enabled: bool,
     zip_enabled: bool,
     dirs_first: bool,
     hide_version_footer: bool,
@@ -213,7 +220,7 @@ pub fn directory_listing(
                 Component::Normal(s) => {
                     name = s.to_string_lossy().to_string();
                     link_accumulator
-                        .push_str(&(utf8_percent_encode(&name, FRAGMENT).to_string() + "/"));
+                        .push_str(&(utf8_percent_encode(&name, PATH_SEGMENT).to_string() + "/"));
                 }
                 _ => name = "".to_string(),
             };
@@ -251,17 +258,23 @@ pub fn directory_listing(
     for entry in dir.path.read_dir()? {
         if dir.is_visible(&entry) || show_hidden {
             let entry = entry?;
-            let p = match entry.path().strip_prefix(&dir.path) {
-                Ok(p) => base.join(p),
-                Err(_) => continue,
-            };
             // show file url as relative to static path
-            let file_url = utf8_percent_encode(&p.to_string_lossy(), FRAGMENT).to_string();
             let file_name = entry.file_name().to_string_lossy().to_string();
+            let (is_symlink, metadata) = match entry.metadata() {
+                Ok(metadata) if metadata.file_type().is_symlink() => {
+                    // for symlinks, get the metadata of the original file
+                    (true, std::fs::metadata(entry.path()))
+                }
+                res => (false, res),
+            };
+            let file_url = base
+                .join(&utf8_percent_encode(&file_name, PATH_SEGMENT).to_string())
+                .to_string_lossy()
+                .to_string();
 
             // if file is a directory, add '/' to the end of the name
-            if let Ok(metadata) = entry.metadata() {
-                if skip_symlinks && metadata.file_type().is_symlink() {
+            if let Ok(metadata) = metadata {
+                if skip_symlinks && is_symlink {
                     continue;
                 }
                 let last_modification_date = match metadata.modified() {
@@ -269,26 +282,20 @@ pub fn directory_listing(
                     Err(_) => None,
                 };
 
-                if metadata.file_type().is_symlink() {
-                    entries.push(Entry::new(
-                        file_name,
-                        EntryType::Symlink,
-                        file_url,
-                        None,
-                        last_modification_date,
-                    ));
-                } else if metadata.is_dir() {
+                if metadata.is_dir() {
                     entries.push(Entry::new(
                         file_name,
                         EntryType::Directory,
+                        is_symlink,
                         file_url,
                         None,
                         last_modification_date,
                     ));
-                } else {
+                } else if metadata.is_file() {
                     entries.push(Entry::new(
                         file_name,
                         EntryType::File,
+                        is_symlink,
                         file_url,
                         Some(ByteSize::b(metadata.len())),
                         last_modification_date,
@@ -329,8 +336,8 @@ pub fn directory_listing(
         entries.sort_by_key(|e| !e.is_dir());
     }
 
-    if let Some(compression_method) = query_params.download {
-        if !compression_method.is_enabled(tar_enabled, zip_enabled) {
+    if let Some(archive_method) = query_params.download {
+        if !archive_method.is_enabled(tar_enabled, tar_gz_enabled, zip_enabled) {
             return Ok(ServiceResponse::new(
                 req.clone(),
                 HttpResponse::Forbidden()
@@ -356,14 +363,14 @@ pub fn directory_listing(
         }
         log::info!(
             "Creating an archive ({extension}) of {path}...",
-            extension = compression_method.extension(),
+            extension = archive_method.extension(),
             path = &dir.path.display().to_string()
         );
 
         let file_name = format!(
             "{}.{}",
             dir.path.file_name().unwrap().to_str().unwrap(),
-            compression_method.extension()
+            archive_method.extension()
         );
 
         // We will create the archive in a separate thread, and stream the content using a pipe.
@@ -375,7 +382,7 @@ pub fn directory_listing(
         // Start the actual archive creation in a separate thread.
         let dir = dir.path.to_path_buf();
         std::thread::spawn(move || {
-            if let Err(err) = compression_method.create_archive(dir, skip_symlinks, pipe) {
+            if let Err(err) = archive_method.create_archive(dir, skip_symlinks, pipe) {
                 log::error!("Error during archive creation: {:?}", err);
             }
         });
@@ -383,8 +390,8 @@ pub fn directory_listing(
         Ok(ServiceResponse::new(
             req.clone(),
             HttpResponse::Ok()
-                .content_type(compression_method.content_type())
-                .encoding(compression_method.content_encoding())
+                .content_type(archive_method.content_type())
+                .encoding(archive_method.content_encoding())
                 .header("Content-Transfer-Encoding", "binary")
                 .header(
                     "Content-Disposition",
@@ -413,6 +420,7 @@ pub fn directory_listing(
                         &encoded_dir,
                         breadcrumbs,
                         tar_enabled,
+                        tar_gz_enabled,
                         zip_enabled,
                         hide_version_footer,
                     )

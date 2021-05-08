@@ -1,6 +1,6 @@
 [package]
 name = "miniserve"
-version = "0.13.1-alpha.0"
+version = "0.14.1-alpha.0"
 description = "For when you really just want to serve some files over HTTP right now!"
 authors = ["Sven-Hendrik Haase <svenstaro@gmail.com>", "Boastful Squirrel <boastful.squirrel@gmail.com>"]
 repository = "https://github.com/svenstaro/miniserve"
@@ -17,18 +17,21 @@ codegen-units = 1
 panic = 'abort'
 
 [dependencies]
-yansi = "0.5"
 actix-web = "3"
+actix-files = "0.5"
+actix-multipart = "0.3"
+actix-web-httpauth = "0.5"
+maud = { version = "0.22", features = ["actix-web"] }
+yansi = "0.5"
 simplelog = "0.10"
 percent-encoding = "2"
 port_check = "0.1"
 bytesize = "1"
-nanoid = "0.3"
+nanoid = "0.4"
 alphanumeric-sort = "1"
 structopt = "0.3"
 chrono = "0.4"
-chrono-humanize = "0.1"
-maud = { version = "0.22", features = ["actix-web"] }
+chrono-humanize = "0.2"
 serde = { version = "1", features = ["derive"] }
 tar = "0.4"
 futures = "0.3"
@@ -41,9 +44,6 @@ sha2 = "0.9"
 hex = "0.4"
 zip = "0.5.11"
 qrcode = "0.12"
-actix-files = "0.5"
-actix-multipart = "0.3"
-actix-web-httpauth = "0.5"
 mime = "0.3"
 httparse = "1"
 http = "0.2"
@@ -57,10 +57,15 @@ assert_cmd = "1"
 reqwest = { version = "0.11", features = ["blocking", "multipart", "rustls-tls"], default-features = false }
 assert_fs = "1"
 select = "0.5"
-rstest = "0.7"
+rstest = "0.9"
 regex = "1"
 pretty_assertions = "0.7"
 url = "2"
 
 [build-dependencies]
 grass = "0.10"
+
+# This needs to stay here at least until https://github.com/abonander/mime_guess/pull/66 is merged.
+# Also see https://github.com/svenstaro/miniserve/issues/160
+[patch.crates-io]
+mime_guess = { git = "https://github.com/svenstaro/mime_guess.git" }

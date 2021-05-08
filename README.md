@@ -74,7 +74,7 @@ Sometimes this is just a more practical and quick way than doing things properly
 
 ## Usage
 
-    miniserve 0.13.0
+    miniserve 0.14.0
     Sven-Hendrik Haase <svenstaro@gmail.com>, Boastful Squirrel <boastful.squirrel@gmail.com>
     For when you really just want to serve some files over HTTP right now!
 
@@ -86,7 +86,10 @@ Sometimes this is just a more practical and quick way than doing things properly
                 List directories first
 
         -r, --enable-tar
-                Enable tar archive generation
+                Enable uncompressed tar archive generation
+
+        -g, --enable-tar-gz
+                Enable gz-compressed tar archive generation
 
         -z, --enable-zip
                 Enable zip archive generation
@@ -201,6 +204,29 @@ few examples with common paths are provided below:
     miniserve --print-completions zsh > /usr/local/share/zsh/site-functions/_miniserve
     # For fish
     miniserve --print-completions fish > ~/.config/fish/completions/miniserve.fish
+
+## systemd
+
+A hardened systemd-compatible unit file can be found in `packaging/miniserve@.service`. You could
+install this to `/etc/systemd/system/miniserve@.service` and start and enable `miniserve` as a
+daemon on a specific serve path `/my/serve/path` like this:
+
+    systemctl enable --now miniserve@-my-serve-path
+
+Keep in mind that you'll have to use `systemd-escape` to properly escape a path for this usage.
+
+In case you want to customize the particular flags that miniserve launches with, you can use
+
+    systemctl edit miniserve@-my-serve-path
+
+and set the `[Service]` part in the resulting `override.conf` file. For instance:
+
+    [Service]
+    ExecStart=/usr/bin/miniserve --enable-tar --enable-zip --no-symlinks --verbose -i ::1 -p 1234 --title hello --color-scheme monokai --color-scheme-dark monokai -- %I
+
+Make sure to leave the `%I` at the very end in place or the wrong path might be served. You
+might additionally have to override `IPAddressAllow` and `IPAddressDeny` if you plan on making
+miniserve directly available on a public interface.
 
 ## Binding behavior
 

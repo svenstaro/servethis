@@ -11,11 +11,11 @@ use zip::{write, ZipWriter};
 
 use crate::errors::ContextualError;
 
-/// Available compression methods
+/// Available archive methods
 #[derive(Deserialize, Clone, Copy, EnumIter, EnumString, Display)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
-pub enum CompressionMethod {
+pub enum ArchiveMethod {
     /// Gzipped tarball
     TarGz,
 
@@ -26,38 +26,38 @@ pub enum CompressionMethod {
     Zip,
 }
 
-impl CompressionMethod {
+impl ArchiveMethod {
     pub fn extension(self) -> String {
         match self {
-            CompressionMethod::TarGz => "tar.gz",
-            CompressionMethod::Tar => "tar",
-            CompressionMethod::Zip => "zip",
+            ArchiveMethod::TarGz => "tar.gz",
+            ArchiveMethod::Tar => "tar",
+            ArchiveMethod::Zip => "zip",
         }
         .to_string()
     }
 
     pub fn content_type(self) -> String {
         match self {
-            CompressionMethod::TarGz => "application/gzip",
-            CompressionMethod::Tar => "application/tar",
-            CompressionMethod::Zip => "application/zip",
+            ArchiveMethod::TarGz => "application/gzip",
+            ArchiveMethod::Tar => "application/tar",
+            ArchiveMethod::Zip => "application/zip",
         }
         .to_string()
     }
 
     pub fn content_encoding(self) -> ContentEncoding {
         match self {
-            CompressionMethod::TarGz => ContentEncoding::Gzip,
-            CompressionMethod::Tar => ContentEncoding::Identity,
-            CompressionMethod::Zip => ContentEncoding::Identity,
+            ArchiveMethod::TarGz => ContentEncoding::Gzip,
+            ArchiveMethod::Tar => ContentEncoding::Identity,
+            ArchiveMethod::Zip => ContentEncoding::Identity,
         }
     }
 
-    pub fn is_enabled(self, tar_enabled: bool, zip_enabled: bool) -> bool {
+    pub fn is_enabled(self, tar_enabled: bool, tar_gz_enabled: bool, zip_enabled: bool) -> bool {
         match self {
-            CompressionMethod::TarGz => tar_enabled,
-            CompressionMethod::Tar => tar_enabled,
-            CompressionMethod::Zip => zip_enabled,
+            ArchiveMethod::TarGz => tar_gz_enabled,
+            ArchiveMethod::Tar => tar_enabled,
+            ArchiveMethod::Zip => zip_enabled,
         }
     }
 
@@ -78,9 +78,9 @@ impl CompressionMethod {
     {
         let dir = dir.as_ref();
         match self {
-            CompressionMethod::TarGz => tar_gz(dir, skip_symlinks, out),
-            CompressionMethod::Tar => tar_dir(dir, skip_symlinks, out),
-            CompressionMethod::Zip => zip_dir(dir, skip_symlinks, out),
+            ArchiveMethod::TarGz => tar_gz(dir, skip_symlinks, out),
+            ArchiveMethod::Tar => tar_dir(dir, skip_symlinks, out),
+            ArchiveMethod::Zip => zip_dir(dir, skip_symlinks, out),
         }
     }
 }

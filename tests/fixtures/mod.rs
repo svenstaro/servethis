@@ -16,6 +16,9 @@ pub static FILES: &[&str] = &[
     "test \" \' & < >.csv",
     "😀.data",
     "⎙.mp4",
+    "#[]{}()@!$&'`+,;= %20.test",
+    #[cfg(unix)]
+    ":?#[]{}<>()@!$&'`|*+,;= %20.test",
 ];
 
 /// Hidden files for testing purpose

@@ -1,0 +1,28 @@
+[Unit]
+Description=miniserve for %i
+After=network-online.target
+Wants=network-online.target systemd-networkd-wait-online.service
+
+[Service]
+ExecStart=/usr/bin/miniserve -- %I
+
+IPAccounting=yes
+IPAddressAllow=localhost
+IPAddressDeny=any
+DynamicUser=yes
+PrivateTmp=yes
+PrivateUsers=yes
+PrivateDevices=yes
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=yes
+ProtectClock=yes
+ProtectControlGroups=yes
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectProc=invisible
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE CAP_DAC_READ_SEARCH
+
+[Install]
+WantedBy=multi-user.target

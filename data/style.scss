@@ -39,7 +39,12 @@ body {
 }
 
 .title {
-    word-break: break-word;
+    word-break: break-all;
+}
+
+.title a {
+    font-weight: bold;
+    color: var(--directory_link_color);
 }
 
 .footer {
@@ -77,11 +82,6 @@ a.file:visited,
     color: var(--file_link_color);
 }
 
-a.symlink,
-a.symlink:visited {
-    color: var(--symlink_link_color);
-}
-
 a.directory:hover {
     color: var(--directory_link_color);
 }
@@ -90,13 +90,10 @@ a.file:hover {
     color: var(--file_link_color);
 }
 
-a.symlink:hover {
-    color: var(--symlink_link_color);
-}
-
-.symlink-symbol {
+.symlink-symbol::after {
+    content: "⇢";
     display: inline-block;
-    border: 1px solid var(--symlink_link_color);
+    border: 1px solid;
     margin-left: 0.5rem;
     border-radius: 0.2rem;
     padding: 0 0.1rem;
@@ -485,15 +482,10 @@ th span.active span {
     }
 
     a.root,
-    a.file,
-    a.symlink {
+    a.file {
         display: inline-block;
         flex: 1;
         padding: 0.5625rem 0;
-    }
-
-    a.symlink {
-        width: 100%;
     }
 
     .back {
@@ -536,7 +528,6 @@ th span.active span {
     --text_color: #323232;
     --directory_link_color: #d02474;
     --file_link_color: #0086b3;
-    --symlink_link_color: #ed6a43;
     --table_background: #ffffff;
     --table_text_color: #323232;
     --table_header_background: #323232;
@@ -581,7 +572,6 @@ th span.active span {
     --text_color: #fefefe;
     --directory_link_color: #03a9f4;
     --file_link_color: #ea95ff;
-    --symlink_link_color: #ff9800;
     --table_background: #353946;
     --table_text_color: #eeeeee;
     --table_header_background: #5294e2;
@@ -626,7 +616,6 @@ th span.active span {
     --text_color: #efefef;
     --directory_link_color: #f0dfaf;
     --file_link_color: #87d6d5;
-    --symlink_link_color: #ffccee;
     --table_background: #4a4949;
     --table_text_color: #efefef;
     --table_header_background: #7f9f7f;
@@ -671,7 +660,6 @@ th span.active span {
     --text_color: #f8f8f2;
     --directory_link_color: #f92672;
     --file_link_color: #a6e22e;
-    --symlink_link_color: #fd971f;
     --table_background: #3b3a32;
     --table_text_color: #f8f8f0;
     --table_header_background: #75715e;

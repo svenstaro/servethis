@@ -90,8 +90,11 @@ pub struct MiniserveConfig {
     /// Enable upload to override existing files
     pub overwrite_files: bool,
 
-    /// If false, creation of tar archives is disabled
+    /// If false, creation of uncompressed tar archives is disabled
     pub tar_enabled: bool,
+
+    /// If false, creation of gz-compressed tar archives is disabled
+    pub tar_gz_enabled: bool,
 
     /// If false, creation of zip archives is disabled
     pub zip_enabled: bool,
@@ -161,6 +164,7 @@ impl MiniserveConfig {
             show_qrcode: args.qrcode,
             file_upload: args.file_upload,
             tar_enabled: args.enable_tar,
+            tar_gz_enabled: args.enable_tar_gz,
             zip_enabled: args.enable_zip,
             dirs_first: args.dirs_first,
             title: args.title,
@@ -430,6 +434,7 @@ fn configure_app(app: &mut web::ServiceConfig, conf: &MiniserveConfig) {
         let show_qrcode = conf.show_qrcode;
         let file_upload = conf.file_upload;
         let tar_enabled = conf.tar_enabled;
+        let tar_gz_enabled = conf.tar_gz_enabled;
         let zip_enabled = conf.zip_enabled;
         let dirs_first = conf.dirs_first;
         let hide_version_footer = conf.hide_version_footer;
@@ -472,12 +477,14 @@ fn configure_app(app: &mut web::ServiceConfig, conf: &MiniserveConfig) {
                         show_qrcode,
                         u_r.clone(),
                         tar_enabled,
+                        tar_gz_enabled,
                         zip_enabled,
                         dirs_first,
                         hide_version_footer,
                         title.clone(),
                     )
                 })
+                .prefer_utf8(true)
                 .default_handler(web::to(error_404));
             Some(files)
         }
