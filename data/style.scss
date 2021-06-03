@@ -90,11 +90,18 @@ a.file:hover {
     color: var(--file_link_color);
 }
 
+a.symlink,
+a.symlink:visited {
+    font-weight: bold;
+    color: var(--symlink_color);
+}
+
 .symlink-symbol::after {
     content: "⇢";
     display: inline-block;
     border: 1px solid;
     margin-left: 0.5rem;
+    margin-right: 0.5rem;
     border-radius: 0.2rem;
     padding: 0 0.1rem;
 }
@@ -270,11 +277,6 @@ td.date-cell {
 
 .history {
     color: var(--date_text_color);
-}
-
-.file-entry {
-    display: flex;
-    justify-content: space-between;
 }
 
 span.size {
@@ -526,6 +528,7 @@ th span.active span {
     --text_color: #323232;
     --directory_link_color: #d02474;
     --file_link_color: #0086b3;
+    --symlink_color: #ADD8E6;
     --table_background: #ffffff;
     --table_text_color: #323232;
     --table_header_background: #323232;
@@ -570,6 +573,7 @@ th span.active span {
     --text_color: #fefefe;
     --directory_link_color: #03a9f4;
     --file_link_color: #ea95ff;
+    --symlink_color: #66d9ef;
     --table_background: #353946;
     --table_text_color: #eeeeee;
     --table_header_background: #5294e2;
@@ -614,6 +618,7 @@ th span.active span {
     --text_color: #efefef;
     --directory_link_color: #f0dfaf;
     --file_link_color: #87d6d5;
+    --symlink_color: #11a8cd;
     --table_background: #4a4949;
     --table_text_color: #efefef;
     --table_header_background: #7f9f7f;
@@ -658,6 +663,7 @@ th span.active span {
     --text_color: #f8f8f2;
     --directory_link_color: #f92672;
     --file_link_color: #a6e22e;
+    --symlink_color: #29b8db;
     --table_background: #3b3a32;
     --table_text_color: #f8f8f0;
     --table_header_background: #75715e;
