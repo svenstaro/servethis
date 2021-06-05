@@ -1,6 +1,5 @@
 use actix_web::body::Body;
 use actix_web::dev::ServiceResponse;
-use actix_web::http::StatusCode;
 use actix_web::web::Query;
 use actix_web::{HttpRequest, HttpResponse, Result};
 use bytesize::ByteSize;
@@ -149,28 +148,12 @@ pub async fn file_handler(req: HttpRequest) -> Result<actix_files::NamedFile> {
 
 /// List a directory and renders a HTML file accordingly
 /// Adapted from https://docs.rs/actix-web/0.7.13/src/actix_web/fs.rs.html#564
-#[allow(clippy::too_many_arguments)]
 pub fn directory_listing(
     dir: &actix_files::Directory,
     req: &HttpRequest,
-    skip_symlinks: bool,
-    show_hidden: bool,
-    file_upload: bool,
-    random_route: Option<String>,
-    favicon_route: String,
-    css_route: String,
-    default_color_scheme: &str,
-    default_color_scheme_dark: &str,
-    show_qrcode: bool,
-    upload_route: String,
-    tar_enabled: bool,
-    tar_gz_enabled: bool,
-    zip_enabled: bool,
-    dirs_first: bool,
-    hide_version_footer: bool,
-    title: Option<String>,
 ) -> Result<ServiceResponse, io::Error> {
     use actix_web::dev::BodyEncoding;
+    let conf = req.app_data::<crate::MiniserveConfig>().unwrap();
     let serve_path = req.path();
 
     // In case the current path is a directory, we want to make sure that the current URL ends
@@ -189,7 +172,7 @@ pub fn directory_listing(
     }
 
     let base = Path::new(serve_path);
-    let random_route_abs = format!("/{}", random_route.clone().unwrap_or_default());
+    let random_route_abs = format!("/{}", conf.random_route.clone().unwrap_or_default());
     let is_root = base.parent().is_none() || Path::new(&req.path()) == Path::new(&random_route_abs);
 
     let encoded_dir = match base.strip_prefix(random_route_abs) {
@@ -200,13 +183,21 @@ pub fn directory_listing(
     .to_string();
 
     let breadcrumbs = {
-        let title = title.unwrap_or_else(|| req.connection_info().host().into());
+        let title = conf
+            .title
+            .clone()
+            .unwrap_or_else(|| req.connection_info().host().into());
 
         let decoded = percent_decode_str(&encoded_dir).decode_utf8_lossy();
 
         let mut res: Vec<Breadcrumb> = Vec::new();
-        let mut link_accumulator =
-            format!("/{}", random_route.map(|r| r + "/").unwrap_or_default());
+        let mut link_accumulator = format!(
+            "/{}",
+            conf.random_route
+                .clone()
+                .map(|r| r + "/")
+                .unwrap_or_default()
+        );
 
         let mut components = Path::new(&*decoded).components().peekable();
 
@@ -256,7 +247,7 @@ pub fn directory_listing(
     let mut entries: Vec<Entry> = Vec::new();
 
     for entry in dir.path.read_dir()? {
-        if dir.is_visible(&entry) || show_hidden {
+        if dir.is_visible(&entry) || conf.show_hidden {
             let entry = entry?;
             // show file url as relative to static path
             let file_name = entry.file_name().to_string_lossy().to_string();
@@ -274,7 +265,7 @@ pub fn directory_listing(
 
             // if file is a directory, add '/' to the end of the name
             if let Ok(metadata) = metadata {
-                if skip_symlinks && is_symlink {
+                if conf.no_symlinks && is_symlink {
                     continue;
                 }
                 let last_modification_date = match metadata.modified() {
@@ -332,33 +323,17 @@ pub fn directory_listing(
     }
 
     // List directories first
-    if dirs_first {
+    if conf.dirs_first {
         entries.sort_by_key(|e| !e.is_dir());
     }
 
     if let Some(archive_method) = query_params.download {
-        if !archive_method.is_enabled(tar_enabled, tar_gz_enabled, zip_enabled) {
+        if !archive_method.is_enabled(conf.tar_enabled, conf.tar_gz_enabled, conf.zip_enabled) {
             return Ok(ServiceResponse::new(
                 req.clone(),
                 HttpResponse::Forbidden()
-                    .content_type("text/html; charset=utf-8")
-                    .body(
-                        renderer::render_error(
-                            "Archive creation is disabled.",
-                            StatusCode::FORBIDDEN,
-                            "/",
-                            None,
-                            None,
-                            false,
-                            false,
-                            &favicon_route,
-                            &css_route,
-                            default_color_scheme,
-                            default_color_scheme_dark,
-                            hide_version_footer,
-                        )
-                        .into_string(),
-                    ),
+                    .content_type("text/plain; charset=utf-8")
+                    .body("Archive creation is disabled."),
             ));
         }
         log::info!(
@@ -381,6 +356,7 @@ pub fn directory_listing(
 
         // Start the actual archive creation in a separate thread.
         let dir = dir.path.to_path_buf();
+        let skip_symlinks = conf.no_symlinks;
         std::thread::spawn(move || {
             if let Err(err) = archive_method.create_archive(dir, skip_symlinks, pipe) {
                 log::error!("Error during archive creation: {:?}", err);
@@ -408,21 +384,10 @@ pub fn directory_listing(
                     renderer::page(
                         entries,
                         is_root,
-                        query_params.sort,
-                        query_params.order,
-                        show_qrcode,
-                        file_upload,
-                        &upload_route,
-                        &favicon_route,
-                        &css_route,
-                        default_color_scheme,
-                        default_color_scheme_dark,
-                        &encoded_dir,
+                        query_params,
                         breadcrumbs,
-                        tar_enabled,
-                        tar_gz_enabled,
-                        zip_enabled,
-                        hide_version_footer,
+                        &encoded_dir,
+                        conf,
                     )
                     .into_string(),
                 ),
