@@ -1,4 +1,3 @@
-use bytes::Bytes;
 use http::header::{HeaderMap, HeaderName, HeaderValue};
 use std::net::IpAddr;
 use std::path::PathBuf;
@@ -189,15 +188,14 @@ fn parse_auth(src: &str) -> Result<auth::RequiredAuth, ContextualError> {
 /// Custom header parser (allow multiple headers input)
 pub fn parse_header(src: &str) -> Result<HeaderMap, httparse::Error> {
     let mut headers = [httparse::EMPTY_HEADER; 1];
-    let mut header = src.to_string();
-    header.push('\n');
+    let header = format!("{}\n", src);
     httparse::parse_headers(header.as_bytes(), &mut headers)?;
 
     let mut header_map = HeaderMap::new();
     if let Some(h) = headers.first() {
         if h.name != httparse::EMPTY_HEADER.name {
             header_map.insert(
-                HeaderName::from_bytes(&Bytes::copy_from_slice(h.name.as_bytes())).unwrap(),
+                HeaderName::from_bytes(h.name.as_bytes()).unwrap(),
                 HeaderValue::from_bytes(h.value).unwrap(),
             );
         }

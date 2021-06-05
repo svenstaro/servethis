@@ -6,31 +6,24 @@ use std::time::SystemTime;
 use structopt::clap::{crate_name, crate_version};
 use strum::IntoEnumIterator;
 
-use crate::archive::ArchiveMethod;
-use crate::listing::{Breadcrumb, Entry, SortingMethod, SortingOrder};
+use crate::listing::{Breadcrumb, Entry, QueryParameters, SortingMethod, SortingOrder};
+use crate::{archive::ArchiveMethod, MiniserveConfig};
 
 /// Renders the file listing
-#[allow(clippy::too_many_arguments)]
 pub fn page(
     entries: Vec<Entry>,
     is_root: bool,
-    sort_method: Option<SortingMethod>,
-    sort_order: Option<SortingOrder>,
-    show_qrcode: bool,
-    file_upload: bool,
-    upload_route: &str,
-    favicon_route: &str,
-    css_route: &str,
-    default_color_scheme: &str,
-    default_color_scheme_dark: &str,
-    encoded_dir: &str,
+    query_params: QueryParameters,
     breadcrumbs: Vec<Breadcrumb>,
-    tar_enabled: bool,
-    tar_gz_enabled: bool,
-    zip_enabled: bool,
-    hide_version_footer: bool,
+    encoded_dir: &str,
+    conf: &MiniserveConfig,
 ) -> Markup {
-    let upload_action = build_upload_action(upload_route, encoded_dir, sort_method, sort_order);
+    let upload_route = match conf.random_route {
+        Some(ref random_route) => format!("/{}/upload", random_route),
+        None => "/upload".to_string(),
+    };
+    let (sort_method, sort_order) = (query_params.sort, query_params.order);
+    let upload_action = build_upload_action(&upload_route, encoded_dir, sort_method, sort_order);
 
     let title_path = breadcrumbs
         .iter()
@@ -41,11 +34,11 @@ pub fn page(
     html! {
         (DOCTYPE)
         html {
-            (page_header(&title_path, file_upload, favicon_route, css_route))
+            (page_header(&title_path, conf.file_upload, &conf.favicon_route, &conf.css_route))
 
             body#drop-container
-                .(format!("default_theme_{}", default_color_scheme))
-                .(format!("default_theme_dark_{}", default_color_scheme_dark)) {
+                .(format!("default_theme_{}", conf.default_color_scheme))
+                .(format!("default_theme_dark_{}", conf.default_color_scheme_dark)) {
 
                 (PreEscaped(r#"
                     <script>
@@ -71,14 +64,14 @@ pub fn page(
                     </script>
                     "#))
 
-                @if file_upload {
+                @if conf.file_upload {
                     div.drag-form {
                         div.drag-title {
                             h1 { "Drop your file here to upload it" }
                         }
                     }
                 }
-                (color_scheme_selector(show_qrcode))
+                (color_scheme_selector(conf.show_qrcode))
                 div.container {
                     span#top { }
                     h1.title dir="ltr" {
@@ -95,16 +88,16 @@ pub fn page(
                         }
                     }
                     div.toolbar {
-                        @if tar_enabled || tar_gz_enabled || zip_enabled {
+                        @if conf.tar_enabled || conf.tar_gz_enabled || conf.zip_enabled {
                             div.download {
                                 @for archive_method in ArchiveMethod::iter() {
-                                    @if archive_method.is_enabled(tar_enabled, tar_gz_enabled, zip_enabled) {
+                                    @if archive_method.is_enabled(conf.tar_enabled, conf.tar_gz_enabled, conf.zip_enabled) {
                                         (archive_button(archive_method, sort_method, sort_order))
                                     }
                                 }
                             }
                         }
-                        @if file_upload {
+                        @if conf.file_upload {
                             div.upload {
                                 form id="file_submit" action=(upload_action) method="POST" enctype="multipart/form-data" {
                                     p { "Select a file to upload or drag it anywhere into the window" }
@@ -141,7 +134,7 @@ pub fn page(
                     a.back href="#top" {
                         (arrow_up())
                     }
-                    @if !hide_version_footer {
+                    @if !conf.hide_version_footer {
                         (version_footer())
                     }
                 }
@@ -469,48 +462,34 @@ fn humanize_systemtime(time: Option<SystemTime>) -> Option<String> {
 }
 
 /// Renders an error on the webpage
-#[allow(clippy::too_many_arguments)]
 pub fn render_error(
     error_description: &str,
     error_code: StatusCode,
+    conf: &MiniserveConfig,
     return_address: &str,
-    sort_method: Option<SortingMethod>,
-    sort_order: Option<SortingOrder>,
-    has_referer: bool,
-    display_back_link: bool,
-    favicon_route: &str,
-    css_route: &str,
-    default_color_scheme: &str,
-    default_color_scheme_dark: &str,
-    hide_version_footer: bool,
 ) -> Markup {
-    let link = if has_referer {
-        return_address.to_string()
-    } else {
-        parametrized_link(return_address, sort_method, sort_order)
-    };
-
     html! {
         (DOCTYPE)
         html {
-            (page_header(&error_code.to_string(), false, favicon_route, css_route))
+            (page_header(&error_code.to_string(), false, &conf.favicon_route, &conf.css_route))
 
-            body.(format!("default_theme_{}", default_color_scheme))
-                .(format!("default_theme_dark_{}", default_color_scheme_dark)) {
+            body.(format!("default_theme_{}", conf.default_color_scheme))
+                .(format!("default_theme_dark_{}", conf.default_color_scheme_dark)) {
 
                 div.error {
                     p { (error_code.to_string()) }
                     @for error in error_description.lines() {
                         p { (error) }
                     }
-                    @if display_back_link {
+                    // WARN don't expose random route!
+                    @if !conf.random_route.is_some() {
                         div.error-nav {
-                            a.error-back href=(link) {
+                            a.error-back href=(return_address) {
                                 "Go back to file listing"
                             }
                         }
                     }
-                    @if !hide_version_footer {
+                    @if !conf.hide_version_footer {
                         (version_footer())
                     }
                 }
