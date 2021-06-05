@@ -47,7 +47,6 @@ qrcodegen = "1"
 mime = "0.3"
 httparse = "1"
 http = "0.2"
-bytes = "1"
 atty = "0.2"
 
 [dev-dependencies]

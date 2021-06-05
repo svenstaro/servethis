@@ -1,11 +1,9 @@
 use actix_web::dev::ServiceRequest;
-use actix_web::http::{header, StatusCode};
-use actix_web::{HttpRequest, HttpResponse, Result};
+use actix_web::{http::header, HttpResponse, Result};
 use actix_web_httpauth::extractors::basic::BasicAuth;
 use sha2::{Digest, Sha256, Sha512};
 
 use crate::errors::{self, ContextualError};
-use crate::renderer;
 
 #[derive(Clone, Debug)]
 /// HTTP Basic authentication parameters
@@ -79,56 +77,27 @@ pub async fn handle_auth(req: ServiceRequest, cred: BasicAuth) -> Result<Service
     if match_auth(cred.into(), required_auth) {
         Ok(ServiceRequest::from_parts(req, pl).unwrap_or_else(|_| unreachable!()))
     } else {
-        Err(HttpResponse::Unauthorized()
-            .header(
-                header::WWW_AUTHENTICATE,
-                header::HeaderValue::from_static("Basic realm=\"miniserve\""),
-            )
-            .body(build_unauthorized_response(
-                &req,
-                ContextualError::InvalidHttpCredentials,
-                true,
-                StatusCode::UNAUTHORIZED,
-            ))
-            .into())
+        Err(build_unauthorized_response(ContextualError::InvalidHttpCredentials, true).into())
     }
 }
 
 /// Builds the unauthorized response body
 /// The reason why log_error_chain is optional is to handle cases where the auth pop-up appears and when the user clicks Cancel.
 /// In those case, we do not log the error to the terminal since it does not really matter.
-fn build_unauthorized_response(
-    req: &HttpRequest,
-    error: ContextualError,
-    log_error_chain: bool,
-    error_code: StatusCode,
-) -> String {
-    let state = req.app_data::<crate::MiniserveConfig>().unwrap();
+fn build_unauthorized_response(error: ContextualError, log_error_chain: bool) -> HttpResponse {
     let error = ContextualError::HttpAuthenticationError(Box::new(error));
 
     if log_error_chain {
         errors::log_error_chain(error.to_string());
     }
-    let return_path = match state.random_route {
-        Some(ref random_route) => format!("/{}", random_route),
-        None => "/".to_string(),
-    };
 
-    renderer::render_error(
-        &error.to_string(),
-        error_code,
-        &return_path,
-        None,
-        None,
-        false,
-        false,
-        &state.favicon_route,
-        &state.css_route,
-        &state.default_color_scheme,
-        &state.default_color_scheme_dark,
-        state.hide_version_footer,
-    )
-    .into_string()
+    HttpResponse::Unauthorized()
+        .header(
+            header::WWW_AUTHENTICATE,
+            header::HeaderValue::from_static("Basic realm=\"miniserve\""),
+        )
+        .content_type("text/plain; charset=utf-8")
+        .body(error.to_string())
 }
 
 #[rustfmt::skip]

@@ -5,10 +5,7 @@ use std::time::Duration;
 use std::{io::Write, path::PathBuf};
 
 use actix_web::web;
-use actix_web::{
-    http::{header::ContentType, StatusCode},
-    Responder,
-};
+use actix_web::{http::header::ContentType, Responder};
 use actix_web::{middleware, App, HttpRequest, HttpResponse};
 use actix_web_httpauth::middleware::HttpAuthentication;
 use http::header::HeaderMap;
@@ -60,8 +57,8 @@ pub struct MiniserveConfig {
     /// Show hidden files
     pub show_hidden: bool,
 
-    /// Enable random route generation
-    pub random_route: Option<String>,
+    /// Route prefix; Either empty (default) or contains a route with a leading slash
+    pub route_prefix: String,
 
     /// Randomly generated favicon route
     pub favicon_route: String,
@@ -124,10 +121,11 @@ impl MiniserveConfig {
             ]
         };
 
-        let random_route = if args.random_route {
-            Some(nanoid::nanoid!(6, &ROUTE_ALPHABET))
-        } else {
-            None
+        let route_prefix = match (args.route_prefix, args.random_route_prefix) {
+            (Some(prefix), _) if prefix.starts_with('/') => prefix,
+            (Some(prefix), _) => format!("/{}", prefix),
+            (_, true) => format!("/{}", nanoid::nanoid!(6, &ROUTE_ALPHABET)),
+            _ => "".to_owned(),
         };
 
         // Generate some random routes for the favicon and css so that they are very unlikely to conflict with
@@ -154,7 +152,7 @@ impl MiniserveConfig {
             path_explicitly_chosen,
             no_symlinks: args.no_symlinks,
             show_hidden: args.hidden,
-            random_route,
+            route_prefix,
             favicon_route,
             css_route,
             default_color_scheme,
@@ -304,21 +302,13 @@ async fn run(miniserve_config: MiniserveConfig) -> Result<(), ContextualError> {
             "{}",
             Color::Green
                 .paint(format!(
-                    "http://{interface}:{port}",
+                    "http://{interface}:{port}{prefix}",
                     interface = &interface,
-                    port = miniserve_config.port
+                    port = miniserve_config.port,
+                    prefix = miniserve_config.route_prefix,
                 ))
                 .bold()
         ));
-
-        if let Some(random_route) = miniserve_config.clone().random_route {
-            addresses.push_str(&format!(
-                "{}",
-                Color::Green
-                    .paint(format!("/{random_route}", random_route = random_route,))
-                    .bold()
-            ));
-        }
     }
 
     let socket_addresses = interfaces
@@ -350,6 +340,7 @@ async fn run(miniserve_config: MiniserveConfig) -> Result<(), ContextualError> {
         App::new()
             .wrap(configure_header(&inside_config.clone()))
             .app_data(inside_config.clone())
+            .wrap_fn(errors::error_page_middleware)
             .wrap(middleware::Condition::new(
                 !inside_config.auth.is_empty(),
                 HttpAuthentication::basic(auth::handle_auth),
@@ -360,7 +351,10 @@ async fn run(miniserve_config: MiniserveConfig) -> Result<(), ContextualError> {
                 web::get().to(favicon),
             )
             .route(&format!("/{}", inside_config.css_route), web::get().to(css))
-            .configure(|c| configure_app(c, &inside_config))
+            .service(
+                web::scope(&inside_config.route_prefix)
+                    .configure(|c| configure_app(c, &inside_config)),
+            )
             .default_service(web::get().to(error_404))
     })
     .bind(socket_addresses.as_slice())
@@ -383,157 +377,46 @@ async fn run(miniserve_config: MiniserveConfig) -> Result<(), ContextualError> {
 }
 
 fn configure_header(conf: &MiniserveConfig) -> middleware::DefaultHeaders {
-    let headers = conf.clone().header;
-
-    let mut default_headers = middleware::DefaultHeaders::new();
-    for header in headers {
-        for (header_name, header_value) in header.into_iter() {
-            if let Some(header_name) = header_name {
-                default_headers = default_headers.header(&header_name, header_value);
-            }
-        }
-    }
-    default_headers
+    conf.header.iter().flatten().fold(
+        middleware::DefaultHeaders::new(),
+        |headers, (header_name, header_value)| headers.header(header_name, header_value),
+    )
 }
 
 /// Configures the Actix application
 fn configure_app(app: &mut web::ServiceConfig, conf: &MiniserveConfig) {
-    let random_route = conf.random_route.clone().unwrap_or_default();
-    let uses_random_route = conf.random_route.clone().is_some();
-    let full_route = format!("/{}", random_route);
-
-    let upload_route;
-    let serve_path = {
-        let path = &conf.path;
-        let no_symlinks = conf.no_symlinks;
-        let show_hidden = conf.show_hidden;
-        let random_route = conf.random_route.clone();
-        let favicon_route = conf.favicon_route.clone();
-        let css_route = conf.css_route.clone();
-        let default_color_scheme = conf.default_color_scheme.clone();
-        let default_color_scheme_dark = conf.default_color_scheme_dark.clone();
-        let show_qrcode = conf.show_qrcode;
-        let file_upload = conf.file_upload;
-        let tar_enabled = conf.tar_enabled;
-        let tar_gz_enabled = conf.tar_gz_enabled;
-        let zip_enabled = conf.zip_enabled;
-        let dirs_first = conf.dirs_first;
-        let hide_version_footer = conf.hide_version_footer;
-        let title = conf.title.clone();
-        upload_route = if let Some(random_route) = conf.random_route.clone() {
-            format!("/{}/upload", random_route)
-        } else {
-            "/upload".to_string()
-        };
-        if path.is_file() {
-            None
-        } else if let Some(index_file) = &conf.index {
-            Some(
-                actix_files::Files::new(&full_route, path).index_file(index_file.to_string_lossy()),
-            )
-        } else {
-            let u_r = upload_route.clone();
-            let files;
-            if show_hidden {
-                files = actix_files::Files::new(&full_route, path)
-                    .show_files_listing()
-                    .use_hidden_files();
-            } else {
-                files = actix_files::Files::new(&full_route, path).show_files_listing();
-            }
-
-            let files = files
-                .files_listing_renderer(move |dir, req| {
-                    listing::directory_listing(
-                        dir,
-                        req,
-                        no_symlinks,
-                        show_hidden,
-                        file_upload,
-                        random_route.clone(),
-                        favicon_route.clone(),
-                        css_route.clone(),
-                        &default_color_scheme,
-                        &default_color_scheme_dark,
-                        show_qrcode,
-                        u_r.clone(),
-                        tar_enabled,
-                        tar_gz_enabled,
-                        zip_enabled,
-                        dirs_first,
-                        hide_version_footer,
-                        title.clone(),
-                    )
-                })
-                .prefer_utf8(true)
-                .default_handler(web::to(error_404));
-            Some(files)
+    let static_files_service = || {
+        let mut files = actix_files::Files::new("", &conf.path);
+        if let Some(ref index_file) = conf.index {
+            files = files.index_file(index_file.to_string_lossy());
         }
+        if conf.show_hidden {
+            files = files.use_hidden_files();
+        }
+        files
+            .show_files_listing()
+            .files_listing_renderer(listing::directory_listing)
+            .prefer_utf8(true)
+            .default_handler(web::to(error_404))
     };
+    let file_upload_service =
+        || web::resource("/upload").route(web::post().to(file_upload::upload_file));
 
-    let favicon_route = conf.favicon_route.clone();
-    let css_route = conf.css_route.clone();
-
-    let default_color_scheme = conf.default_color_scheme.clone();
-    let default_color_scheme_dark = conf.default_color_scheme_dark.clone();
-    let hide_version_footer = conf.hide_version_footer;
-
-    if let Some(serve_path) = serve_path {
+    if conf.path.is_dir() {
         if conf.file_upload {
             // Allow file upload
-            app.service(
-                web::resource(&upload_route).route(web::post().to(move |req, payload| {
-                    file_upload::upload_file(
-                        req,
-                        payload,
-                        uses_random_route,
-                        favicon_route.clone(),
-                        css_route.clone(),
-                        &default_color_scheme,
-                        &default_color_scheme_dark,
-                        hide_version_footer,
-                    )
-                })),
-            )
-            // Handle directories
-            .service(serve_path);
-        } else {
-            // Handle directories
-            app.service(serve_path);
+            app.service(file_upload_service());
         }
+        // Handle directories
+        app.service(static_files_service());
     } else {
         // Handle single files
-        app.service(web::resource(&full_route).route(web::to(listing::file_handler)));
+        app.service(web::resource("").route(web::to(listing::file_handler)));
     }
 }
 
-async fn error_404(req: HttpRequest) -> HttpResponse {
-    let err_404 = ContextualError::RouteNotFoundError(req.path().to_string());
-    let conf = req.app_data::<MiniserveConfig>().unwrap();
-    let uses_random_route = conf.random_route.is_some();
-    let favicon_route = conf.favicon_route.clone();
-    let css_route = conf.css_route.clone();
-    let query_params = listing::extract_query_parameters(&req);
-
-    errors::log_error_chain(err_404.to_string());
-
-    actix_web::HttpResponse::NotFound().body(
-        renderer::render_error(
-            &err_404.to_string(),
-            StatusCode::NOT_FOUND,
-            "/",
-            query_params.sort,
-            query_params.order,
-            false,
-            !uses_random_route,
-            &favicon_route,
-            &css_route,
-            &conf.default_color_scheme,
-            &conf.default_color_scheme_dark,
-            conf.hide_version_footer,
-        )
-        .into_string(),
-    )
+async fn error_404(req: HttpRequest) -> Result<HttpResponse, ContextualError> {
+    Err(ContextualError::RouteNotFoundError(req.path().to_string()))
 }
 
 async fn favicon() -> impl Responder {

@@ -1,3 +1,13 @@
+use crate::{renderer::render_error, MiniserveConfig};
+use actix_web::{
+    dev::{
+        HttpResponseBuilder, MessageBody, ResponseBody, ResponseHead, Service, ServiceRequest,
+        ServiceResponse,
+    },
+    http::{header, StatusCode},
+    HttpRequest, HttpResponse, ResponseError,
+};
+use futures::{future::LocalBoxFuture, prelude::*};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -74,6 +84,79 @@ Please set an explicit serve path like: `miniserve /my/path`")]
     /// In case miniserve was invoked with --no-symlinks but the serve path is a symlink
     #[error("The -P|--no-symlinks option was provided but the serve path '{0}' is a symlink")]
     NoSymlinksOptionWithSymlinkServePath(String),
+}
+
+impl ResponseError for ContextualError {
+    fn status_code(&self) -> StatusCode {
+        match *self {
+            Self::ArchiveCreationError(_, ref err) | Self::HttpAuthenticationError(ref err) => {
+                err.status_code()
+            }
+            Self::RouteNotFoundError(_) => StatusCode::NOT_FOUND,
+            Self::InsufficientPermissionsError(_) => StatusCode::FORBIDDEN,
+            Self::InvalidHttpCredentials => StatusCode::UNAUTHORIZED,
+            Self::InvalidHttpRequestError(_) => StatusCode::BAD_REQUEST,
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
+        }
+    }
+
+    fn error_response(&self) -> HttpResponse {
+        log_error_chain(self.to_string());
+        HttpResponseBuilder::new(self.status_code())
+            .content_type("text/plain; charset=utf-8")
+            .body(self.to_string())
+    }
+}
+
+/// Middleware to convert plain error responses to user-friendly web pages
+pub fn error_page_middleware<S, B>(
+    req: S::Request,
+    srv: &mut S,
+) -> LocalBoxFuture<'static, Result<S::Response, S::Error>>
+where
+    S: Service<Request = ServiceRequest, Response = ServiceResponse<B>, Error = actix_web::Error>,
+    S::Future: 'static,
+    B: MessageBody + 'static,
+{
+    let fut = srv.call(req);
+
+    async {
+        let res = fut.await?;
+
+        if (res.status().is_client_error() || res.status().is_server_error())
+            && res.headers().get(header::CONTENT_TYPE)
+                == Some(&header::HeaderValue::from_static(
+                    "text/plain; charset=utf-8",
+                ))
+        {
+            let req = res.request().clone();
+            let mut res = res;
+            let msg_parts = res.take_body().try_collect::<Vec<_>>().await?;
+            let msg = msg_parts.as_slice().concat();
+            let msg = String::from_utf8_lossy(&msg);
+            let new_page = map_error_page(&req, res.response_mut().head_mut(), &msg);
+            Ok(res.map_body(|_, _| ResponseBody::Other(new_page.into())))
+        } else {
+            Ok(res)
+        }
+    }
+    .boxed_local()
+}
+
+fn map_error_page(req: &HttpRequest, head: &mut ResponseHead, error_msg: &str) -> String {
+    let conf = req.app_data::<MiniserveConfig>().unwrap();
+    let return_address = req
+        .headers()
+        .get(header::REFERER)
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or("/");
+
+    head.headers.insert(
+        header::CONTENT_TYPE,
+        header::HeaderValue::from_static("text/html; charset=utf-8"),
+    );
+
+    render_error(error_msg, head.status, conf, &return_address).into_string()
 }
 
 pub fn log_error_chain(description: String) {
