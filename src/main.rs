@@ -489,8 +489,8 @@ fn configure_app(app: &mut web::ServiceConfig, conf: &MiniserveConfig) {
                         uses_random_route,
                         favicon_route.clone(),
                         css_route.clone(),
-                        &default_color_scheme,
-                        &default_color_scheme_dark,
+                        default_color_scheme.clone(),
+                        default_color_scheme_dark.clone(),
                         hide_version_footer,
                     )
                 })),
