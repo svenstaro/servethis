@@ -371,7 +371,7 @@ checksum = "aa2dfc8228c6260bf620fc5a341afa8e27edcde388b19ffc5732320bfe657eb2"
 dependencies = [
  "bstr",
  "doc-comment",
- "predicates",
+ "predicates 1.0.8",
  "predicates-core",
  "predicates-tree",
  "wait-timeout",
@@ -379,13 +379,13 @@ dependencies = [
 
 [[package]]
 name = "assert_fs"
-version = "1.0.2"
+version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73c485ca248200dfb850a64468a926321865cae0c450eaa7cdbe9ccf4ec49028"
+checksum = "b0ca6aa3066e6c6f0357e056a25fa95e8737f15a04f9aead0b22d0d082a39465"
 dependencies = [
  "doc-comment",
  "globwalk",
- "predicates",
+ "predicates 2.0.0",
  "predicates-core",
  "predicates-tree",
  "tempfile",
@@ -744,6 +744,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "524cbf6897b527295dff137cec09ecf3a05f4fddffd7dfcd1585403449e74198"
 
 [[package]]
+name = "difflib"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6184e33543162437515c2e2b48714794e37845ec9851711914eec9d308f6ebe8"
+
+[[package]]
 name = "digest"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -813,15 +819,6 @@ dependencies = [
  "crc32fast",
  "libc",
  "miniz_oxide",
-]
-
-[[package]]
-name = "float-cmp"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1267f4ac4f343772758f7b1bdcbe767c218bbab93bb432acbf5162bbf85a6c4"
-dependencies = [
- "num-traits",
 ]
 
 [[package]]
@@ -1298,6 +1295,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68f2d64f2edebec4ce84ad108148e67e1064789bee435edc5b60ad398714a3a9"
 
 [[package]]
+name = "itertools"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "69ddb889f9d0d08a67338271fa9b62996bc788c7796a5c18cf057420aaed5eaf"
+dependencies = [
+ "either",
+]
+
+[[package]]
 name = "itoa"
 version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1656,12 +1662,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "normalize-line-endings"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61807f77802ff30975e01f4f071c8ba10c022052f98b3294119f3e615d13e5be"
-
-[[package]]
 name = "ntapi"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1935,10 +1935,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f49cfaf7fdaa3bfacc6fa3e7054e65148878354a5cfddcf661df4c851f8021df"
 dependencies = [
  "difference",
- "float-cmp",
- "normalize-line-endings",
  "predicates-core",
- "regex",
+]
+
+[[package]]
+name = "predicates"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c6e46ca79eb4e21e2ec14430340c71250ab69332abf85521c95d3a8bc336aa76"
+dependencies = [
+ "difflib",
+ "itertools",
+ "predicates-core",
 ]
 
 [[package]]
