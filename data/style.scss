@@ -52,6 +52,20 @@ body {
     padding-top: 1.5rem;
     font-size: 0.7em;
     color: var(--footer_color);
+
+    .downloadWget {
+        display: flex;
+        flex-direction: row;
+        justify-content: center;
+        flex-wrap: wrap;
+        .cmd {
+            margin: 0 0 auto;
+            padding-left: 5px;
+
+            line-height: 13px;
+            font-family: monospace;
+        }
+    }
 }
 
 a {

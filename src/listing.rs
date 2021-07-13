@@ -13,6 +13,7 @@ use std::time::SystemTime;
 use strum_macros::{Display, EnumString};
 
 use crate::archive::ArchiveMethod;
+use crate::auth::CurrentUser;
 use crate::errors::{self, ContextualError};
 use crate::renderer;
 use percent_encode_sets::PATH_SEGMENT;
@@ -33,6 +34,7 @@ pub struct QueryParameters {
     pub path: Option<PathBuf>,
     pub sort: Option<SortingMethod>,
     pub order: Option<SortingOrder>,
+    pub raw: Option<bool>,
     qrcode: Option<String>,
     download: Option<ArchiveMethod>,
 }
@@ -170,6 +172,9 @@ pub fn directory_listing(
     hide_version_footer: bool,
     title: Option<String>,
 ) -> Result<ServiceResponse, io::Error> {
+    let extensions = req.extensions();
+    let current_user: Option<&CurrentUser> = extensions.get::<CurrentUser>();
+
     use actix_web::dev::BodyEncoding;
     let serve_path = req.path();
 
@@ -405,25 +410,30 @@ pub fn directory_listing(
             HttpResponse::Ok()
                 .content_type("text/html; charset=utf-8")
                 .body(
-                    renderer::page(
-                        entries,
-                        is_root,
-                        query_params.sort,
-                        query_params.order,
-                        show_qrcode,
-                        file_upload,
-                        &upload_route,
-                        &favicon_route,
-                        &css_route,
-                        default_color_scheme,
-                        default_color_scheme_dark,
-                        &encoded_dir,
-                        breadcrumbs,
-                        tar_enabled,
-                        tar_gz_enabled,
-                        zip_enabled,
-                        hide_version_footer,
-                    )
+                    if query_params.raw.is_some() && query_params.raw.unwrap() == true {
+                        renderer::raw(entries, is_root, query_params.sort, query_params.order)
+                    } else {
+                        renderer::page(
+                            entries,
+                            is_root,
+                            query_params.sort,
+                            query_params.order,
+                            show_qrcode,
+                            file_upload,
+                            &upload_route,
+                            &favicon_route,
+                            &css_route,
+                            default_color_scheme,
+                            default_color_scheme_dark,
+                            &encoded_dir,
+                            breadcrumbs,
+                            tar_enabled,
+                            tar_gz_enabled,
+                            zip_enabled,
+                            hide_version_footer,
+                            current_user,
+                        )
+                    }
                     .into_string(),
                 ),
         ))
@@ -436,6 +446,7 @@ pub fn extract_query_parameters(req: &HttpRequest) -> QueryParameters {
             sort: query.sort,
             order: query.order,
             download: query.download,
+            raw: query.raw,
             qrcode: query.qrcode.to_owned(),
             path: query.path.clone(),
         },
@@ -446,6 +457,7 @@ pub fn extract_query_parameters(req: &HttpRequest) -> QueryParameters {
                 sort: None,
                 order: None,
                 download: None,
+                raw: None,
                 qrcode: None,
                 path: None,
             }
