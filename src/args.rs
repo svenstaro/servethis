@@ -126,6 +126,10 @@ pub struct CliArgs {
     #[structopt(long = "header", parse(try_from_str = parse_header), number_of_values = 1)]
     pub header: Vec<HeaderMap>,
 
+    /// Show symlink info
+    #[structopt(short = "l", long = "show-symlink-info")]
+    pub show_symlink_info: bool,
+
     /// Hide version footer
     #[structopt(short = "F", long = "hide-version-footer")]
     pub hide_version_footer: bool,

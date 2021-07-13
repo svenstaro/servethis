@@ -108,6 +108,9 @@ pub struct MiniserveConfig {
     /// If specified, header will be added
     pub header: Vec<HeaderMap>,
 
+    /// If specified, symlink destination will be shown
+    pub show_symlink_info: bool,
+
     /// If enabled, version footer is hidden
     pub hide_version_footer: bool,
 }
@@ -169,6 +172,7 @@ impl MiniserveConfig {
             dirs_first: args.dirs_first,
             title: args.title,
             header: args.header,
+            show_symlink_info: args.show_symlink_info,
             hide_version_footer: args.hide_version_footer,
         }
     }
@@ -419,6 +423,7 @@ fn configure_app(app: &mut web::ServiceConfig, conf: &MiniserveConfig) {
         let zip_enabled = conf.zip_enabled;
         let dirs_first = conf.dirs_first;
         let hide_version_footer = conf.hide_version_footer;
+        let cmd_enable_symlink_dest = conf.show_symlink_info;
         let title = conf.title.clone();
         upload_route = if let Some(random_route) = conf.random_route.clone() {
             format!("/{}/upload", random_route)
@@ -462,6 +467,7 @@ fn configure_app(app: &mut web::ServiceConfig, conf: &MiniserveConfig) {
                         zip_enabled,
                         dirs_first,
                         hide_version_footer,
+                        cmd_enable_symlink_dest,
                         title.clone(),
                     )
                 })

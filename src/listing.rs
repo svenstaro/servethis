@@ -84,9 +84,6 @@ pub struct Entry {
     /// Type of the entry
     pub entry_type: EntryType,
 
-    /// Entry is symlink. Not mutually exclusive with entry_type
-    pub is_symlink: bool,
-
     /// URL of the entry
     pub link: String,
 
@@ -95,24 +92,27 @@ pub struct Entry {
 
     /// Last modification date
     pub last_modification_date: Option<SystemTime>,
+
+    /// Path of symlink pointed to
+    pub symlink_info: Option<String>,
 }
 
 impl Entry {
     fn new(
         name: String,
         entry_type: EntryType,
-        is_symlink: bool,
         link: String,
         size: Option<bytesize::ByteSize>,
         last_modification_date: Option<SystemTime>,
+        symlink_info: Option<String>,
     ) -> Self {
         Entry {
             name,
             entry_type,
-            is_symlink,
             link,
             size,
             last_modification_date,
+            symlink_info,
         }
     }
 
@@ -168,6 +168,7 @@ pub fn directory_listing(
     zip_enabled: bool,
     dirs_first: bool,
     hide_version_footer: bool,
+    show_symlink_info: bool,
     title: Option<String>,
 ) -> Result<ServiceResponse, io::Error> {
     use actix_web::dev::BodyEncoding;
@@ -267,6 +268,11 @@ pub fn directory_listing(
                 }
                 res => (false, res),
             };
+            let symlink_dest = if is_symlink && show_symlink_info {
+                Some(std::fs::read_link(entry.path())?)
+            } else {
+                None
+            };
             let file_url = base
                 .join(&utf8_percent_encode(&file_name, PATH_SEGMENT).to_string())
                 .to_string_lossy()
@@ -286,19 +292,19 @@ pub fn directory_listing(
                     entries.push(Entry::new(
                         file_name,
                         EntryType::Directory,
-                        is_symlink,
                         file_url,
                         None,
                         last_modification_date,
+                        symlink_dest.and_then(|s| s.into_os_string().into_string().ok()),
                     ));
                 } else if metadata.is_file() {
                     entries.push(Entry::new(
                         file_name,
                         EntryType::File,
-                        is_symlink,
                         file_url,
                         Some(ByteSize::b(metadata.len())),
                         last_modification_date,
+                        symlink_dest.and_then(|s| s.into_os_string().into_string().ok()),
                     ));
                 }
             } else {

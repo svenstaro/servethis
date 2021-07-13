@@ -328,24 +328,33 @@ fn entry_row(
             td {
                 p {
                     @if entry.is_dir() {
-                        a.directory href=(parametrized_link(&entry.link, sort_method, sort_order)) {
-                            (entry.name) "/"
-                            @if entry.is_symlink {
+                        @if let Some(symlink_dest) = entry.symlink_info {
+                            a.symlink href=(parametrized_link(&entry.link, sort_method, sort_order)) {
+                                (entry.name) "/"
                                 span.symlink-symbol { }
+                                a.directory {(symlink_dest) "/"}
+                            }
+                        }@else {
+                            a.directory href=(parametrized_link(&entry.link, sort_method, sort_order)) {
+                                (entry.name) "/"
                             }
                         }
                     } @else if entry.is_file() {
-                        div.file-entry {
+                        @if let Some(symlink_dest) = entry.symlink_info {
+                            a.symlink href=(&entry.link) {
+                                (entry.name)
+                                span.symlink-symbol { }
+                                a.file {(symlink_dest)}
+                            }
+                        }@else {
                             a.file href=(&entry.link) {
                                 (entry.name)
-                                @if entry.is_symlink {
-                                    span.symlink-symbol { }
-                                }
                             }
-                            @if let Some(size) = entry.size {
-                                span.mobile-info.size {
-                                    (size)
-                                }
+                        }
+
+                        @if let Some(size) = entry.size {
+                            span.mobile-info.size {
+                                (size)
                             }
                         }
                     }
