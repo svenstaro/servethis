@@ -31,6 +31,14 @@ pub struct CliArgs {
     #[structopt(long, parse(from_os_str), name = "index_file")]
     pub index: Option<PathBuf>,
 
+    /// The index file of a single page application
+    ///
+    /// If this option is set, miniserve will serve the specified file instead of a 404 page when
+    /// a non-existent path is requested. This is intended for single-page applications where
+    /// routing takes place on the client side.
+    #[structopt(long, parse(from_os_str), name = "spa_index_file")]
+    pub spa_index: Option<PathBuf>,
+
     /// Port to use
     #[structopt(short = "p", long = "port", default_value = "8080")]
     pub port: u16,
