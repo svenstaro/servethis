@@ -8,6 +8,8 @@ use regex::Regex;
 use rstest::rstest;
 use select::document::Document;
 use select::node::Node;
+use std::fs::File;
+use std::io::Read;
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::thread::sleep;
@@ -277,6 +279,54 @@ fn serves_requests_custom_index_notice(tmpdir: TempDir, port: u16) -> Result<(),
     assert!(all_text
         .unwrap()
         .contains("The file 'not.html' provided for option --index could not be found."));
+
+    Ok(())
+}
+
+#[rstest(
+    index,
+    exists,
+    case(FILES[0], true),
+    case("not.html", false),
+)]
+fn serves_requests_custom_index(
+    tmpdir: TempDir,
+    port: u16,
+    index: &str,
+    exists: bool,
+) -> Result<(), Error> {
+    let mut child = Command::cargo_bin("miniserve")?
+        .arg(format!("--index={}", index))
+        .arg("--verbose")
+        .arg("-p")
+        .arg(port.to_string())
+        .arg(tmpdir.path())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+
+    sleep(Duration::from_secs(1));
+
+    let content = reqwest::blocking::get(format!("http://localhost:{}", port).as_str())?
+        .error_for_status()?
+        .text()?;
+
+    if exists {
+        let mut content_expected = String::new();
+        File::open(tmpdir.path().join(Path::new(index)))?.read_to_string(&mut content_expected)?;
+        assert_eq!(content, content_expected)
+    }
+
+    child.kill()?;
+    let output = child.wait_with_output().expect("Failed to read stdout");
+    let all_text = String::from_utf8(output.stdout);
+
+    assert_ne!(
+        exists,
+        all_text
+            .unwrap()
+            .contains("provided for option --index could not be found in")
+    );
 
     Ok(())
 }

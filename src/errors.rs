@@ -74,6 +74,10 @@ Please set an explicit serve path like: `miniserve /my/path`")]
     /// In case miniserve was invoked with --no-symlinks but the serve path is a symlink
     #[error("The -P|--no-symlinks option was provided but the serve path '{0}' is a symlink")]
     NoSymlinksOptionWithSymlinkServePath(String),
+
+    /// Semantic configuration error (e.g. conflicting command line options)
+    #[error("Invalid configuration: {0}")]
+    ConfigError(String),
 }
 
 pub fn log_error_chain(description: String) {

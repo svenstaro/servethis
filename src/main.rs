@@ -2,7 +2,10 @@ use std::io;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::thread;
 use std::time::Duration;
-use std::{io::Write, path::PathBuf};
+use std::{
+    io::Write,
+    path::{Component, PathBuf},
+};
 
 use actix_web::web;
 use actix_web::{
@@ -114,7 +117,7 @@ pub struct MiniserveConfig {
 
 impl MiniserveConfig {
     /// Parses the command line arguments
-    fn from_args(args: args::CliArgs) -> Self {
+    fn from_args(args: args::CliArgs) -> Result<Self, ContextualError> {
         let interfaces = if !args.interfaces.is_empty() {
             args.interfaces
         } else {
@@ -138,16 +141,39 @@ impl MiniserveConfig {
         let default_color_scheme = args.color_scheme;
         let default_color_scheme_dark = args.color_scheme_dark;
 
-        let path_explicitly_chosen = args.path.is_some() || args.index.is_some();
+        let (path, index) = match (args.path, args.index) {
+            (None, None) => (None, None),
+            (None, Some(index)) => match (index.parent(), index.file_name()) {
+                (Some(parent), Some(file_name)) if parent.components().count() == 0 => {
+                    Ok((Some(PathBuf::from(".")), Some(PathBuf::from(file_name))))
+                }
+                (Some(parent), Some(file_name)) => {
+                    Ok((Some(parent.to_path_buf()), Some(PathBuf::from(file_name))))
+                }
+                _ => Err(ContextualError::ConfigError(
+                    "Cannot infer path to serve from option --index".to_string(),
+                )),
+            }?,
+            (Some(path), None) => (Some(path), None),
+            (Some(path), Some(index)) => match index.components().enumerate().last() {
+                // Make sure that index is a single file name
+                Some((0, Component::Normal(_))) => Ok((Some(path), Some(index))),
+                _ => Err(ContextualError::ConfigError(
+                    "When path is specified, index option expects a single file name".to_string(),
+                )),
+            }?,
+        };
+
+        let path_explicitly_chosen = path.is_some();
 
         let port = match args.port {
             0 => port_check::free_local_port().expect("no free ports available"),
             _ => args.port,
         };
 
-        crate::MiniserveConfig {
+        Ok(crate::MiniserveConfig {
             verbose: args.verbose,
-            path: args.path.unwrap_or_else(|| PathBuf::from(".")),
+            path: path.unwrap_or_else(|| PathBuf::from(".")),
             port,
             interfaces,
             auth: args.auth,
@@ -159,7 +185,7 @@ impl MiniserveConfig {
             css_route,
             default_color_scheme,
             default_color_scheme_dark,
-            index: args.index,
+            index,
             overwrite_files: args.overwrite_files,
             show_qrcode: args.qrcode,
             file_upload: args.file_upload,
@@ -170,33 +196,14 @@ impl MiniserveConfig {
             title: args.title,
             header: args.header,
             hide_version_footer: args.hide_version_footer,
-        }
+        })
     }
 }
 
 fn main() {
     let args = args::CliArgs::from_args();
 
-    if let Some(shell) = args.print_completions {
-        args::CliArgs::clap().gen_completions_to("miniserve", shell, &mut std::io::stdout());
-        return;
-    }
-
-    let miniserve_config = MiniserveConfig::from_args(args);
-
-    match run(miniserve_config) {
-        Ok(()) => (),
-        Err(e) => errors::log_error_chain(e.to_string()),
-    }
-}
-
-#[actix_web::main(miniserve)]
-async fn run(miniserve_config: MiniserveConfig) -> Result<(), ContextualError> {
-    if cfg!(windows) && !Paint::enable_windows_ascii() {
-        Paint::disable();
-    }
-
-    let log_level = if miniserve_config.verbose {
+    let log_level = if args.verbose {
         simplelog::LevelFilter::Info
     } else {
         simplelog::LevelFilter::Warn
@@ -212,6 +219,23 @@ async fn run(miniserve_config: MiniserveConfig) -> Result<(), ContextualError> {
     {
         simplelog::SimpleLogger::init(log_level, simplelog::Config::default())
             .expect("Couldn't initialize logger")
+    }
+
+    if let Some(shell) = args.print_completions {
+        args::CliArgs::clap().gen_completions_to("miniserve", shell, &mut std::io::stdout());
+        return;
+    }
+
+    match MiniserveConfig::from_args(args).and_then(run) {
+        Ok(()) => (),
+        Err(e) => errors::log_error_chain(e.to_string()),
+    }
+}
+
+#[actix_web::main(miniserve)]
+async fn run(miniserve_config: MiniserveConfig) -> Result<(), ContextualError> {
+    if cfg!(windows) && !Paint::enable_windows_ascii() {
+        Paint::disable();
     }
 
     if miniserve_config.no_symlinks {
@@ -420,6 +444,7 @@ fn configure_app(app: &mut web::ServiceConfig, conf: &MiniserveConfig) {
         let dirs_first = conf.dirs_first;
         let hide_version_footer = conf.hide_version_footer;
         let title = conf.title.clone();
+        let index = conf.index.clone();
         upload_route = if let Some(random_route) = conf.random_route.clone() {
             format!("/{}/upload", random_route)
         } else {
@@ -427,10 +452,6 @@ fn configure_app(app: &mut web::ServiceConfig, conf: &MiniserveConfig) {
         };
         if path.is_file() {
             None
-        } else if let Some(index_file) = &conf.index {
-            Some(
-                actix_files::Files::new(&full_route, path).index_file(index_file.to_string_lossy()),
-            )
         } else {
             let u_r = upload_route.clone();
             let files;
@@ -463,6 +484,7 @@ fn configure_app(app: &mut web::ServiceConfig, conf: &MiniserveConfig) {
                         dirs_first,
                         hide_version_footer,
                         title.clone(),
+                        index.clone(),
                     )
                 })
                 .prefer_utf8(true)

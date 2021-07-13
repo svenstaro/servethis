@@ -169,6 +169,7 @@ pub fn directory_listing(
     dirs_first: bool,
     hide_version_footer: bool,
     title: Option<String>,
+    index: Option<PathBuf>,
 ) -> Result<ServiceResponse, io::Error> {
     use actix_web::dev::BodyEncoding;
     let serve_path = req.path();
@@ -251,6 +252,26 @@ pub fn directory_listing(
             }
         };
         return Ok(ServiceResponse::new(req.clone(), res));
+    }
+
+    // Serve index file. If it doesn't exist, ignore and list content.
+    if let Some(index_path) = index {
+        if let Ok(index_file) = actix_files::NamedFile::open(dir.path.join(index_path.clone())) {
+            let res = match index_file.into_response(req) {
+                Ok(res) => res,
+                Err(err) => {
+                    log::error!("Error while serving index file: {:?}", err);
+                    HttpResponse::InternalServerError().body(Body::Empty)
+                }
+            };
+            return Ok(ServiceResponse::new(req.clone(), res));
+        } else {
+            log::warn!(
+                "The file '{}' provided for option --index could not be found in {}.",
+                index_path.to_string_lossy(),
+                serve_path,
+            );
+        }
     }
 
     let mut entries: Vec<Entry> = Vec::new();
