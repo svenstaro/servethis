@@ -16,6 +16,7 @@ use log::{error, warn};
 use structopt::clap::crate_version;
 use structopt::StructOpt;
 use yansi::{Color, Paint};
+use openssl::ssl::{SslAcceptor, SslFiletype, SslMethod};
 
 mod archive;
 mod args;
@@ -110,6 +111,9 @@ pub struct MiniserveConfig {
 
     /// If enabled, version footer is hidden
     pub hide_version_footer: bool,
+
+    /// Openssl config
+    pub openssl: (Option<String>, Option<String>),
 }
 
 impl MiniserveConfig {
@@ -170,6 +174,7 @@ impl MiniserveConfig {
             title: args.title,
             header: args.header,
             hide_version_footer: args.hide_version_footer,
+            openssl: (args.openssl_ca, args.openssl_key),
         }
     }
 }
@@ -346,7 +351,7 @@ async fn run(miniserve_config: MiniserveConfig) -> Result<(), ContextualError> {
         }
     };
 
-    let srv = actix_web::HttpServer::new(move || {
+    let http_serve = actix_web::HttpServer::new(move || {
         App::new()
             .wrap(configure_header(&inside_config.clone()))
             .app_data(inside_config.clone())
@@ -362,11 +367,23 @@ async fn run(miniserve_config: MiniserveConfig) -> Result<(), ContextualError> {
             .route(&format!("/{}", inside_config.css_route), web::get().to(css))
             .configure(|c| configure_app(c, &inside_config))
             .default_service(web::get().to(error_404))
-    })
-    .bind(socket_addresses.as_slice())
-    .map_err(|e| ContextualError::IoError("Failed to bind server".to_string(), e))?
-    .shutdown_timeout(0)
-    .run();
+    });
+    let cacert = miniserve_config.openssl.0;
+    let key = miniserve_config.openssl.1;
+    let bind =  if cacert.is_some() && key.is_some() {
+        let mut builder = SslAcceptor::mozilla_intermediate(SslMethod::tls()).unwrap();
+        builder
+            .set_private_key_file(key.unwrap(), SslFiletype::PEM)
+            .unwrap();
+        builder.set_certificate_chain_file(cacert.unwrap()).unwrap();
+        http_serve.bind_openssl(socket_addresses.as_slice(), builder)
+    } else {
+        http_serve.bind(socket_addresses.as_slice())
+    };
+    let srv = bind
+        .map_err(|e| ContextualError::IoError("Failed to bind server".to_string(), e))?
+        .shutdown_timeout(0)
+        .run();
 
     println!(
         "Serving path {path} at {addresses}",

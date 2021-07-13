@@ -133,6 +133,14 @@ pub struct CliArgs {
     /// Generate completion file for a shell
     #[structopt(long = "print-completions", value_name = "shell", possible_values = &structopt::clap::Shell::variants())]
     pub print_completions: Option<structopt::clap::Shell>,
+
+    /// Path to opsnssl file: key
+    #[structopt(short = "k", long = "key")]
+    pub openssl_key: Option<String>,
+
+    /// Path to opsnssl file: cacert
+    #[structopt(short = "C", long = "cacert")]
+    pub openssl_ca: Option<String>,
 }
 
 /// Checks wether an interface is valid, i.e. it can be parsed into an IP address

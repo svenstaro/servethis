@@ -71,6 +71,7 @@ Sometimes this is just a more practical and quick way than doing things properly
 - Scan QR code for quick access
 - Shell completions
 - Sane and secure defaults
+- Openssl support
 
 ## Usage
 
@@ -141,7 +142,9 @@ Sometimes this is just a more practical and quick way than doing things properly
                 directory contains this file, miniserve will serve that file instead.
         -i, --interfaces <interfaces>...
                 Interface to listen on
-
+        -C --cacert <openssl-ca>                      Path to opsnssl file: cacert
+        -k --key <openssl-key>                        Path to opsnssl file: key
+            If you would like use openssl, please make sure you have typed both cacert file path and key file path.
         -p, --port <port>
                 Port to use [default: 8080]
 

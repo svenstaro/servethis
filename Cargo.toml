@@ -17,7 +17,7 @@ codegen-units = 1
 panic = 'abort'
 
 [dependencies]
-actix-web = "3"
+actix-web = { version = "3", features = ["openssl"] }
 actix-files = "0.5"
 actix-multipart = "0.3"
 actix-web-httpauth = "0.5"
@@ -49,6 +49,7 @@ httparse = "1"
 http = "0.2"
 bytes = "1"
 atty = "0.2"
+openssl = "0.10"
 
 [dev-dependencies]
 assert_cmd = "1"
