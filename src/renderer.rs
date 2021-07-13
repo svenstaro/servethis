@@ -18,7 +18,9 @@ pub fn page(
     sort_order: Option<SortingOrder>,
     show_qrcode: bool,
     file_upload: bool,
+    mkdir: bool,
     upload_route: &str,
+    mkdir_route: &str,
     favicon_route: &str,
     css_route: &str,
     default_color_scheme: &str,
@@ -31,6 +33,7 @@ pub fn page(
     hide_version_footer: bool,
 ) -> Markup {
     let upload_action = build_upload_action(upload_route, encoded_dir, sort_method, sort_order);
+    let mkdir_action = build_mkdir_action(mkdir_route, encoded_dir, sort_method, sort_order);
 
     let title_path = breadcrumbs
         .iter()
@@ -104,13 +107,26 @@ pub fn page(
                                 }
                             }
                         }
-                        @if file_upload {
-                            div.upload {
-                                form id="file_submit" action=(upload_action) method="POST" enctype="multipart/form-data" {
-                                    p { "Select a file to upload or drag it anywhere into the window" }
-                                    div {
-                                        input#file-input type="file" name="file_to_upload" required="" multiple {}
-                                        button type="submit" { "Upload file" }
+                        div.toolbar_form_group {
+                            @if file_upload {
+                                div.toolbar_form {
+                                    form id="file_submit" action=(upload_action) method="POST" enctype="multipart/form-data" {
+                                        p { "Select a file to upload or drag it anywhere into the window" }
+                                        div {
+                                            input#file-input type="file" name="file_to_upload" required="" multiple {}
+                                            button type="submit" { "Upload file" }
+                                        }
+                                    }
+                                }
+                            }
+                            @if mkdir {
+                                div.toolbar_form {
+                                    form id="mkdir" action=(mkdir_action) method="POST" {
+                                        p { "Specify a directory name to create" }
+                                        div {
+                                            input#mkdir type="text" name="mkdir_name" required="" placeholder="directory name" {}
+                                            button type="submit" { "Create directory" }
+                                        }
                                     }
                                 }
                             }
@@ -161,6 +177,24 @@ fn version_footer() -> Markup {
 
 /// Build the action of the upload form
 fn build_upload_action(
+    upload_route: &str,
+    encoded_dir: &str,
+    sort_method: Option<SortingMethod>,
+    sort_order: Option<SortingOrder>,
+) -> String {
+    let mut upload_action = format!("{}?path={}", upload_route, encoded_dir);
+    if let Some(sorting_method) = sort_method {
+        upload_action = format!("{}&sort={}", upload_action, &sorting_method);
+    }
+    if let Some(sorting_order) = sort_order {
+        upload_action = format!("{}&order={}", upload_action, &sorting_order);
+    }
+
+    upload_action
+}
+
+/// Build the action of the mkdir form
+fn build_mkdir_action(
     upload_route: &str,
     encoded_dir: &str,
     sort_method: Option<SortingMethod>,

@@ -37,6 +37,12 @@ pub struct QueryParameters {
     download: Option<ArchiveMethod>,
 }
 
+/// Form parameters
+#[derive(Deserialize)]
+pub struct FormParameters {
+    pub mkdir_name: Option<PathBuf>,
+}
+
 /// Available sorting methods
 #[derive(Deserialize, Clone, EnumString, Display, Copy)]
 #[serde(rename_all = "snake_case")]
@@ -156,6 +162,7 @@ pub fn directory_listing(
     skip_symlinks: bool,
     show_hidden: bool,
     file_upload: bool,
+    mkdir: bool,
     random_route: Option<String>,
     favicon_route: String,
     css_route: String,
@@ -163,6 +170,7 @@ pub fn directory_listing(
     default_color_scheme_dark: &str,
     show_qrcode: bool,
     upload_route: String,
+    mkdir_route: String,
     tar_enabled: bool,
     tar_gz_enabled: bool,
     zip_enabled: bool,
@@ -412,7 +420,9 @@ pub fn directory_listing(
                         query_params.order,
                         show_qrcode,
                         file_upload,
+                        mkdir,
                         &upload_route,
+                        &mkdir_route,
                         &favicon_route,
                         &css_route,
                         default_color_scheme,

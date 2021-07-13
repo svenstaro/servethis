@@ -368,25 +368,31 @@ th span.active span {
     margin-right: 1rem;
 }
 
-.upload {
+.toolbar_form_group {
+    display: flex;
+    flex-direction: row;
+}
+
+.toolbar_form {
     margin-top: 1rem;
     display: flex;
     justify-content: flex-end;
+    margin: 0 5px ;
 }
 
-.upload p {
+.toolbar_form p {
     font-size: 0.8rem;
     margin-bottom: 1rem;
     color: var(--upload_text_color);
 }
 
-.upload form {
+.toolbar_form form {
     padding: 1rem;
     border: 1px solid var(--upload_form_border_color);
     background: var(--upload_form_background);
 }
 
-.upload button {
+.toolbar_form button {
     background: var(--upload_button_background);
     padding: 0.5rem;
     border-radius: 0.2rem;
@@ -394,7 +400,7 @@ th span.active span {
     border: none;
 }
 
-.upload div {
+.toolbar_form div {
     display: flex;
     align-items: baseline;
     justify-content: space-between;

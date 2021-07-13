@@ -58,6 +58,13 @@ Sometimes this is just a more practical and quick way than doing things properly
 
 (where `$FILE` is the path to the file. This uses miniserve's default port of 8080)
 
+### Creating a directory using `curl`:
+
+    # in one terminal
+    miniserve -m .
+    # in another terminal
+    curl -d "mkdir_name=test_directory" http://localhost:8080/mkdir\?path\=/
+
 ## Features
 
 - Easy to use
@@ -98,6 +105,9 @@ Sometimes this is just a more practical and quick way than doing things properly
                 memory and cannot be sent on the fly
         -u, --upload-files
                 Enable file uploading
+
+        -m, --mkdir
+                Enable creating directory
 
         -h, --help
                 Prints help information

@@ -14,6 +14,10 @@ pub enum ContextualError {
     #[error("File already exists, and the overwrite_files option has not been set")]
     DuplicateFileError,
 
+    /// Might occur during mkdir
+    #[error("Directory or file already exist")]
+    ConflictMkdirError,
+
     /// Any error related to an invalid path (failed to retrieve entry name, unexpected entry type, etc)
     #[error("Invalid path\ncaused by: {0}")]
     InvalidPathError(String),

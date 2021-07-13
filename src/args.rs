@@ -95,6 +95,10 @@ pub struct CliArgs {
     #[structopt(short = "u", long = "upload-files")]
     pub file_upload: bool,
 
+    /// Enable creating directory
+    #[structopt(short = "m", long = "mkdir")]
+    pub mkdir: bool,
+
     /// Enable overriding existing files during file upload
     #[structopt(short = "o", long = "overwrite-files")]
     pub overwrite_files: bool,
