@@ -49,6 +49,8 @@ httparse = "1"
 http = "0.2"
 bytes = "1"
 atty = "0.2"
+socket2 = "0.4"
+get_if_addrs = "0.5"
 
 [dev-dependencies]
 assert_cmd = "1"
