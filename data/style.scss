@@ -69,17 +69,22 @@ a:hover {
     text-decoration: underline;
 }
 
-a.directory,
-a.directory:visited {
+a.directory {
     font-weight: bold;
     color: var(--directory_link_color);
+
+    &:visited {
+        color: var(--directory_link_color_visited);
+    }
 }
 
 a.file,
-a.file:visited,
-.error-back,
-.error-back:visited {
+.error-back {
     color: var(--file_link_color);
+
+    &:visited {
+        color: var(--file_link_color_visited)
+    }
 }
 
 a.directory:hover {
@@ -525,7 +530,9 @@ th span.active span {
     --background: #ffffff;
     --text_color: #323232;
     --directory_link_color: #d02474;
+    --directory_link_color_visited: #9b1985;
     --file_link_color: #0086b3;
+    --file_link_color_visited: #974ec2;
     --table_background: #ffffff;
     --table_text_color: #323232;
     --table_header_background: #323232;
@@ -569,7 +576,9 @@ th span.active span {
     --background: #383c4a;
     --text_color: #fefefe;
     --directory_link_color: #03a9f4;
+    --directory_link_color_visited: #0388f4;
     --file_link_color: #ea95ff;
+    --file_link_color_visited: #a595ff;
     --table_background: #353946;
     --table_text_color: #eeeeee;
     --table_header_background: #5294e2;
@@ -613,7 +622,9 @@ th span.active span {
     --background: #3f3f3f;
     --text_color: #efefef;
     --directory_link_color: #f0dfaf;
+    --directory_link_color_visited: #ebc390;
     --file_link_color: #87d6d5;
+    --file_link_color_visited: #a7b9ec;
     --table_background: #4a4949;
     --table_text_color: #efefef;
     --table_header_background: #7f9f7f;
@@ -657,7 +668,9 @@ th span.active span {
     --background: #272822;
     --text_color: #f8f8f2;
     --directory_link_color: #f92672;
+    --directory_link_color_visited: #bc39a7;
     --file_link_color: #a6e22e;
+    --file_link_color_visited: #4cb936;
     --table_background: #3b3a32;
     --table_text_color: #f8f8f0;
     --table_header_background: #75715e;
