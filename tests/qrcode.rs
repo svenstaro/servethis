@@ -1,74 +1,35 @@
 mod fixtures;
 
-use assert_cmd::prelude::*;
-use assert_fs::fixture::TempDir;
-use fixtures::{port, tmpdir, Error};
+use fixtures::{server, server_no_stderr, Error, TestServer};
 use reqwest::StatusCode;
 use rstest::rstest;
 use select::document::Document;
 use select::predicate::Attr;
 use std::iter::repeat_with;
-use std::process::{Command, Stdio};
-use std::thread::sleep;
-use std::time::Duration;
 
 #[rstest]
-fn hide_qrcode_element(tmpdir: TempDir, port: u16) -> Result<(), Error> {
-    let mut child = Command::cargo_bin("miniserve")?
-        .arg(tmpdir.path())
-        .arg("-p")
-        .arg(port.to_string())
-        .stdout(Stdio::null())
-        .spawn()?;
-
-    sleep(Duration::from_secs(1));
-
-    let body = reqwest::blocking::get(format!("http://localhost:{}", port).as_str())?
-        .error_for_status()?;
+fn hide_qrcode_element(server: TestServer) -> Result<(), Error> {
+    let body = reqwest::blocking::get(server.url())?.error_for_status()?;
     let parsed = Document::from_read(body)?;
     assert!(parsed.find(Attr("id", "qrcode")).next().is_none());
 
-    child.kill()?;
-
     Ok(())
 }
 
-#[rstest]
-fn show_qrcode_element(tmpdir: TempDir, port: u16) -> Result<(), Error> {
-    let mut child = Command::cargo_bin("miniserve")?
-        .arg(tmpdir.path())
-        .arg("-p")
-        .arg(port.to_string())
-        .arg("-q")
-        .stdout(Stdio::null())
-        .spawn()?;
-
-    sleep(Duration::from_secs(1));
-
-    let body = reqwest::blocking::get(format!("http://localhost:{}", port).as_str())?
-        .error_for_status()?;
+#[rstest(server(&["-q"]))]
+fn show_qrcode_element(server: TestServer) -> Result<(), Error> {
+    let body = reqwest::blocking::get(server.url())?.error_for_status()?;
     let parsed = Document::from_read(body)?;
     assert!(parsed.find(Attr("id", "qrcode")).next().is_some());
 
-    child.kill()?;
-
     Ok(())
 }
 
 #[rstest]
-fn get_svg_qrcode(tmpdir: TempDir, port: u16) -> Result<(), Error> {
-    let mut child = Command::cargo_bin("miniserve")?
-        .arg(tmpdir.path())
-        .arg("-p")
-        .arg(port.to_string())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()?;
-
-    sleep(Duration::from_secs(1));
-
+fn get_svg_qrcode(server_no_stderr: TestServer) -> Result<(), Error> {
+    let server = server_no_stderr;
     // Ok
-    let resp = reqwest::blocking::get(format!("http://localhost:{}/?qrcode=test", port).as_str())?;
+    let resp = reqwest::blocking::get(server.url().join("/?qrcode=test")?)?;
 
     assert_eq!(resp.status(), StatusCode::OK);
     assert_eq!(resp.headers()["Content-Type"], "image/svg+xml");
@@ -78,12 +39,9 @@ fn get_svg_qrcode(tmpdir: TempDir, port: u16) -> Result<(), Error> {
 
     // Err
     let content: String = repeat_with(|| '0').take(8 * 1024).collect();
-    let resp =
-        reqwest::blocking::get(format!("http://localhost:{}/?qrcode={}", port, content).as_str())?;
+    let resp = reqwest::blocking::get(server.url().join(&format!("?qrcode={}", content))?)?;
 
     assert_eq!(resp.status(), StatusCode::URI_TOO_LONG);
-
-    child.kill()?;
 
     Ok(())
 }

@@ -1,16 +1,11 @@
 mod fixtures;
 mod utils;
 
-use assert_cmd::prelude::*;
-use assert_fs::fixture::TempDir;
-use fixtures::{port, tmpdir, Error, DEEPLY_NESTED_FILE, DIRECTORIES};
+use fixtures::{server, Error, TestServer, DEEPLY_NESTED_FILE, DIRECTORIES};
 use pretty_assertions::{assert_eq, assert_ne};
 use rstest::rstest;
 use select::document::Document;
 use std::process::{Command, Stdio};
-use std::thread::sleep;
-use std::time::Duration;
-use url::Url;
 use utils::get_link_from_text;
 
 #[rstest(
@@ -22,45 +17,19 @@ use utils::get_link_from_text;
     case("/very/deeply/nested", "/very/deeply/nested/")
 )]
 /// Directories get a trailing slash.
-fn index_gets_trailing_slash(
-    tmpdir: TempDir,
-    port: u16,
-    input: &str,
-    expected: &str,
-) -> Result<(), Error> {
-    let mut child = Command::cargo_bin("miniserve")?
-        .arg("-p")
-        .arg(port.to_string())
-        .arg(tmpdir.path())
-        .stdout(Stdio::null())
-        .spawn()?;
-
-    sleep(Duration::from_secs(1));
-
-    let base_url = Url::parse(&format!("http://localhost:{}", port))?;
-    let resp = reqwest::blocking::get(base_url.join(input)?)?;
+fn index_gets_trailing_slash(server: TestServer, input: &str, expected: &str) -> Result<(), Error> {
+    let resp = reqwest::blocking::get(server.url().join(input)?)?;
     assert!(resp.url().as_str().ends_with(expected));
-
-    child.kill()?;
 
     Ok(())
 }
 
 #[rstest]
 /// Can't navigate up the root.
-fn cant_navigate_up_the_root(tmpdir: TempDir, port: u16) -> Result<(), Error> {
-    let mut child = Command::cargo_bin("miniserve")?
-        .arg("-p")
-        .arg(port.to_string())
-        .arg(tmpdir.path())
-        .stdout(Stdio::null())
-        .spawn()?;
-
-    sleep(Duration::from_secs(1));
-
+fn cant_navigate_up_the_root(server: TestServer) -> Result<(), Error> {
     // We're using curl for this as it has the option `--path-as-is` which doesn't normalize
     // invalid urls. A useful feature in this particular case.
-    let base_url = Url::parse(&format!("http://localhost:{}", port))?;
+    let base_url = server.url();
     let curl_successful = Command::new("curl")
         .arg("-s")
         .arg("--fail")
@@ -71,24 +40,13 @@ fn cant_navigate_up_the_root(tmpdir: TempDir, port: u16) -> Result<(), Error> {
         .success();
     assert!(curl_successful);
 
-    child.kill()?;
-
     Ok(())
 }
 
 #[rstest]
 /// We can navigate into directories and back using shown links.
-fn can_navigate_into_dirs_and_back(tmpdir: TempDir, port: u16) -> Result<(), Error> {
-    let mut child = Command::cargo_bin("miniserve")?
-        .arg("-p")
-        .arg(port.to_string())
-        .arg(tmpdir.path())
-        .stdout(Stdio::null())
-        .spawn()?;
-
-    sleep(Duration::from_secs(1));
-
-    let base_url = Url::parse(&format!("http://localhost:{}/", port))?;
+fn can_navigate_into_dirs_and_back(server: TestServer) -> Result<(), Error> {
+    let base_url = server.url();
     let initial_body = reqwest::blocking::get(base_url.as_str())?.error_for_status()?;
     let initial_parsed = Document::from_read(initial_body)?;
     for &directory in DIRECTORIES {
@@ -105,23 +63,12 @@ fn can_navigate_into_dirs_and_back(tmpdir: TempDir, port: u16) -> Result<(), Err
         assert_eq!(resp.url().as_str(), base_url.as_str());
     }
 
-    child.kill()?;
-
     Ok(())
 }
 
 #[rstest]
 /// We can navigate deep into the file tree and back using shown links.
-fn can_navigate_deep_into_dirs_and_back(tmpdir: TempDir, port: u16) -> Result<(), Error> {
-    let mut child = Command::cargo_bin("miniserve")?
-        .arg("-p")
-        .arg(port.to_string())
-        .arg(tmpdir.path())
-        .stdout(Stdio::null())
-        .spawn()?;
-
-    sleep(Duration::from_secs(1));
-
+fn can_navigate_deep_into_dirs_and_back(server: TestServer) -> Result<(), Error> {
     // Create a vector of directory names. We don't need to fetch the file and so we'll
     // remove that part.
     let dir_names = {
@@ -132,7 +79,7 @@ fn can_navigate_deep_into_dirs_and_back(tmpdir: TempDir, port: u16) -> Result<()
         comps.pop();
         comps
     };
-    let base_url = Url::parse(&format!("http://localhost:{}/", port))?;
+    let base_url = server.url();
 
     // First we'll go forwards through the directory tree and then we'll go backwards.
     // In the end, we'll have to end up where we came from.
@@ -157,29 +104,17 @@ fn can_navigate_deep_into_dirs_and_back(tmpdir: TempDir, port: u16) -> Result<()
     }
     assert_eq!(base_url, next_url);
 
-    child.kill()?;
-
     Ok(())
 }
 
 #[rstest(use_custom_title, case(true), case(false))]
 /// We can use breadcrumbs to navigate.
-fn can_navigate_using_breadcrumbs(
-    tmpdir: TempDir,
-    port: u16,
-    use_custom_title: bool,
-) -> Result<(), Error> {
-    let mut command_base = Command::cargo_bin("miniserve")?;
-    let mut command = command_base.arg("-p").arg(port.to_string());
-
-    if use_custom_title {
-        command = command.arg("--title").arg("some title")
-    }
-
-    let mut child = command.arg(tmpdir.path()).stdout(Stdio::null()).spawn()?;
-
-    sleep(Duration::from_secs(1));
-
+fn can_navigate_using_breadcrumbs(use_custom_title: bool) -> Result<(), Error> {
+    let server = server(if use_custom_title {
+        &["--title", "some title"]
+    } else {
+        &[] as &[&str]
+    });
     // Create a vector of directory names. We don't need to fetch the file and so we'll
     // remove that part.
     let dir: String = {
@@ -191,7 +126,7 @@ fn can_navigate_using_breadcrumbs(
         comps.join("")
     };
 
-    let base_url = Url::parse(&format!("http://localhost:{}/", port))?;
+    let base_url = server.url();
     let nested_url = base_url.join(&dir)?;
 
     let resp = reqwest::blocking::get(nested_url.as_str())?;
@@ -201,7 +136,7 @@ fn can_navigate_using_breadcrumbs(
     let title_name = if use_custom_title {
         "some title".to_string()
     } else {
-        format!("localhost:{}", port)
+        format!("localhost:{}", server.port())
     };
 
     // can go back to root dir by clicking title
@@ -216,8 +151,6 @@ fn can_navigate_using_breadcrumbs(
     // current dir is not linked
     let current_dir_link = get_link_from_text(&parsed, "nested");
     assert_eq!(None, current_dir_link);
-
-    child.kill()?;
 
     Ok(())
 }

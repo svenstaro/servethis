@@ -1,7 +1,12 @@
+use assert_cmd::prelude::*;
 use assert_fs::fixture::TempDir;
 use assert_fs::prelude::*;
 use port_check::free_local_port;
+use reqwest::Url;
 use rstest::fixture;
+use std::process::{Child, Command, Stdio};
+use std::thread::sleep;
+use std::time::Duration;
 
 /// Error type used by tests
 pub type Error = Box<dyn std::error::Error>;
@@ -75,4 +80,86 @@ pub fn tmpdir() -> TempDir {
 #[allow(dead_code)]
 pub fn port() -> u16 {
     free_local_port().expect("Couldn't find a free local port")
+}
+
+/// Run miniserve as a server; Start with a temporary directory, a free port and some
+/// optional arguments then wait for a while for the server setup to complete.
+#[fixture(args=&[] as &[&str])]
+#[allow(dead_code)]
+pub fn server<S>(args: impl IntoIterator<Item = S>) -> TestServer
+where
+    S: AsRef<std::ffi::OsStr>,
+{
+    let port = port();
+    let tmpdir = tmpdir();
+    let child = Command::cargo_bin("miniserve")
+        .expect("Couldn't find test binary")
+        .arg(tmpdir.path())
+        .arg("-p")
+        .arg(port.to_string())
+        .args(args)
+        .stdout(Stdio::null())
+        .spawn()
+        .expect("Couldn't run test binary");
+
+    sleep(Duration::from_secs(1));
+    TestServer::new(port, tmpdir, child)
+}
+
+/// Same as `server()` but ignore stderr
+#[fixture(args=&[] as &[&str])]
+#[allow(dead_code)]
+pub fn server_no_stderr<S>(args: impl IntoIterator<Item = S>) -> TestServer
+where
+    S: AsRef<std::ffi::OsStr>,
+{
+    let port = port();
+    let tmpdir = tmpdir();
+    let child = Command::cargo_bin("miniserve")
+        .expect("Couldn't find test binary")
+        .arg(tmpdir.path())
+        .arg("-p")
+        .arg(port.to_string())
+        .args(args)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("Couldn't run test binary");
+
+    sleep(Duration::from_secs(1));
+    TestServer::new(port, tmpdir, child)
+}
+
+#[allow(dead_code)]
+pub struct TestServer {
+    port: u16,
+    tmpdir: TempDir,
+    child: Child,
+}
+
+#[allow(dead_code)]
+impl TestServer {
+    pub fn new(port: u16, tmpdir: TempDir, child: Child) -> Self {
+        Self {
+            port,
+            tmpdir,
+            child,
+        }
+    }
+    pub fn url(&self) -> Url {
+        Url::parse(&format!("http://localhost:{}", self.port)).unwrap()
+    }
+    pub fn path(&self) -> &std::path::Path {
+        self.tmpdir.path()
+    }
+    pub fn port(&self) -> u16 {
+        self.port
+    }
+}
+
+impl Drop for TestServer {
+    fn drop(&mut self) {
+        self.child.kill().expect("Couldn't kill test server");
+        /* TODO may need .wait() ? */
+    }
 }

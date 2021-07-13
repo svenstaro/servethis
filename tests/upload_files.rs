@@ -1,33 +1,17 @@
 mod fixtures;
 
-use assert_cmd::prelude::*;
-use assert_fs::fixture::TempDir;
-use fixtures::{port, tmpdir, Error};
+use fixtures::{server, Error, TestServer};
 use reqwest::blocking::{multipart, Client};
 use rstest::rstest;
 use select::document::Document;
 use select::predicate::{Attr, Text};
-use std::process::{Command, Stdio};
-use std::thread::sleep;
-use std::time::Duration;
 
-#[rstest]
-fn uploading_files_works(tmpdir: TempDir, port: u16) -> Result<(), Error> {
+#[rstest(server(&["-u"]))]
+fn uploading_files_works(server: TestServer) -> Result<(), Error> {
     let test_file_name = "uploaded test file.txt";
 
-    let mut child = Command::cargo_bin("miniserve")?
-        .arg(tmpdir.path())
-        .arg("-p")
-        .arg(port.to_string())
-        .arg("-u")
-        .stdout(Stdio::null())
-        .spawn()?;
-
-    sleep(Duration::from_secs(1));
-
     // Before uploading, check whether the uploaded file does not yet exist.
-    let body = reqwest::blocking::get(format!("http://localhost:{}", port).as_str())?
-        .error_for_status()?;
+    let body = reqwest::blocking::get(server.url())?.error_for_status()?;
     let parsed = Document::from_read(body)?;
     assert!(parsed.find(Text).all(|x| x.text() != test_file_name));
 
@@ -46,37 +30,25 @@ fn uploading_files_works(tmpdir: TempDir, port: u16) -> Result<(), Error> {
 
     let client = Client::new();
     client
-        .post(format!("http://localhost:{}{}", port, upload_action).as_str())
+        .post(server.url().join(upload_action)?)
         .multipart(form)
         .send()?
         .error_for_status()?;
 
     // After uploading, check whether the uploaded file is now getting listed.
-    let body = reqwest::blocking::get(format!("http://localhost:{}", port).as_str())?;
+    let body = reqwest::blocking::get(server.url())?;
     let parsed = Document::from_read(body)?;
     assert!(parsed.find(Text).any(|x| x.text() == test_file_name));
-
-    child.kill()?;
 
     Ok(())
 }
 
 #[rstest]
-fn uploading_files_is_prevented(tmpdir: TempDir, port: u16) -> Result<(), Error> {
+fn uploading_files_is_prevented(server: TestServer) -> Result<(), Error> {
     let test_file_name = "uploaded test file.txt";
 
-    let mut child = Command::cargo_bin("miniserve")?
-        .arg(tmpdir.path())
-        .arg("-p")
-        .arg(port.to_string())
-        .stdout(Stdio::null())
-        .spawn()?;
-
-    sleep(Duration::from_secs(1));
-
     // Before uploading, check whether the uploaded file does not yet exist.
-    let body = reqwest::blocking::get(format!("http://localhost:{}", port).as_str())?
-        .error_for_status()?;
+    let body = reqwest::blocking::get(server.url())?.error_for_status()?;
     let parsed = Document::from_read(body)?;
     assert!(parsed.find(Text).all(|x| x.text() != test_file_name));
 
@@ -93,18 +65,16 @@ fn uploading_files_is_prevented(tmpdir: TempDir, port: u16) -> Result<(), Error>
     let client = Client::new();
     // Ensure uploading fails and returns an error
     assert!(client
-        .post(format!("http://localhost:{}{}", port, "/upload?path=/").as_str())
+        .post(server.url().join("/upload?path=/")?)
         .multipart(form)
         .send()?
         .error_for_status()
         .is_err());
 
     // After uploading, check whether the uploaded file is now getting listed.
-    let body = reqwest::blocking::get(format!("http://localhost:{}", port).as_str())?;
+    let body = reqwest::blocking::get(server.url())?;
     let parsed = Document::from_read(body)?;
     assert!(!parsed.find(Text).any(|x| x.text() == test_file_name));
-
-    child.kill()?;
 
     Ok(())
 }

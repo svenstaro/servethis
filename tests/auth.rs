@@ -1,17 +1,12 @@
 mod fixtures;
 
-use assert_cmd::prelude::*;
-use assert_fs::fixture::TempDir;
-use fixtures::{port, tmpdir, Error, FILES};
+use fixtures::{server, server_no_stderr, Error, FILES};
 use pretty_assertions::assert_eq;
 use reqwest::blocking::Client;
 use reqwest::StatusCode;
 use rstest::rstest;
 use select::document::Document;
 use select::predicate::Text;
-use std::process::{Command, Stdio};
-use std::thread::sleep;
-use std::time::Duration;
 
 #[rstest(
     cli_auth_arg, client_username, client_password,
@@ -28,26 +23,14 @@ use std::time::Duration;
     ),
 )]
 fn auth_accepts(
-    tmpdir: TempDir,
-    port: u16,
     cli_auth_arg: &str,
     client_username: &str,
     client_password: &str,
 ) -> Result<(), Error> {
-    let mut child = Command::cargo_bin("miniserve")?
-        .arg(tmpdir.path())
-        .arg("-p")
-        .arg(port.to_string())
-        .arg("-a")
-        .arg(cli_auth_arg)
-        .stdout(Stdio::null())
-        .spawn()?;
-
-    sleep(Duration::from_secs(1));
-
+    let server = server(&["-a", cli_auth_arg]);
     let client = Client::new();
     let response = client
-        .get(format!("http://localhost:{}", port).as_str())
+        .get(server.url())
         .basic_auth(client_username, Some(client_password))
         .send()?;
 
@@ -59,8 +42,6 @@ fn auth_accepts(
     for &file in FILES {
         assert!(parsed.find(Text).any(|x| x.text() == file));
     }
-
-    child.kill()?;
 
     Ok(())
 }
@@ -91,56 +72,39 @@ fn auth_accepts(
     ),
 )]
 fn auth_rejects(
-    tmpdir: TempDir,
-    port: u16,
     cli_auth_arg: &str,
     client_username: &str,
     client_password: &str,
 ) -> Result<(), Error> {
-    let mut child = Command::cargo_bin("miniserve")?
-        .arg(tmpdir.path())
-        .arg("-p")
-        .arg(port.to_string())
-        .arg("-a")
-        .arg(cli_auth_arg)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()?;
-
-    sleep(Duration::from_secs(1));
-
+    let server = server_no_stderr(&["-a", cli_auth_arg]);
     let client = Client::new();
     let status = client
-        .get(format!("http://localhost:{}", port).as_str())
+        .get(server.url())
         .basic_auth(client_username, Some(client_password))
         .send()?
         .status();
 
     assert_eq!(status, StatusCode::UNAUTHORIZED);
 
-    child.kill()?;
-
     Ok(())
 }
 
-/// Helper function that registers multiple accounts
-#[cfg(test)]
-fn register_accounts<'a>(command: &'a mut Command) -> &'a mut Command {
-    command
-        .arg("--auth")
-        .arg("usr0:pwd0")
-        .arg("--auth")
-        .arg("usr1:pwd1")
-        .arg("--auth")
-        .arg("usr2:sha256:149d2937d1bce53fa683ae652291bd54cc8754444216a9e278b45776b76375af") // pwd2
-        .arg("--auth")
-        .arg("usr3:sha256:ffc169417b4146cebe09a3e9ffbca33db82e3e593b4d04c0959a89c05b87e15d") // pwd3
-        .arg("--auth")
-        .arg("usr4:sha512:68050a967d061ac480b414bc8f9a6d368ad0082203edcd23860e94c36178aad1a038e061716707d5479e23081a6d920dc6e9f88e5eb789cdd23e211d718d161a") // pwd4
-        .arg("--auth")
-        .arg("usr5:sha512:be82a7dccd06122f9e232e9730e67e69e30ec61b268fd9b21a5e5d42db770d45586a1ce47816649a0107e9fadf079d9cf0104f0a3aaa0f67bad80289c3ba25a8")
+/// Command line arguments that register multiple accounts
+static ACCOUNTS: &[&str] = &[
+    "--auth",
+    "usr0:pwd0",
+    "--auth",
+    "usr1:pwd1",
+    "--auth",
+    "usr2:sha256:149d2937d1bce53fa683ae652291bd54cc8754444216a9e278b45776b76375af", // pwd2
+    "--auth",
+    "usr3:sha256:ffc169417b4146cebe09a3e9ffbca33db82e3e593b4d04c0959a89c05b87e15d", // pwd3
+    "--auth",
+    "usr4:sha512:68050a967d061ac480b414bc8f9a6d368ad0082203edcd23860e94c36178aad1a038e061716707d5479e23081a6d920dc6e9f88e5eb789cdd23e211d718d161a", // pwd4
+    "--auth",
+    "usr5:sha512:be82a7dccd06122f9e232e9730e67e69e30ec61b268fd9b21a5e5d42db770d45586a1ce47816649a0107e9fadf079d9cf0104f0a3aaa0f67bad80289c3ba25a8",
     // pwd5
-}
+];
 
 #[rstest(
     username,
@@ -152,25 +116,12 @@ fn register_accounts<'a>(command: &'a mut Command) -> &'a mut Command {
     case("usr4", "pwd4"),
     case("usr5", "pwd5")
 )]
-fn auth_multiple_accounts_pass(
-    tmpdir: TempDir,
-    port: u16,
-    username: &str,
-    password: &str,
-) -> Result<(), Error> {
-    let mut child = register_accounts(&mut Command::cargo_bin("miniserve")?)
-        .arg("-p")
-        .arg(port.to_string())
-        .arg(tmpdir.path())
-        .stdout(Stdio::null())
-        .spawn()?;
-
-    sleep(Duration::from_secs(1));
-
+fn auth_multiple_accounts_pass(username: &str, password: &str) -> Result<(), Error> {
+    let server = server(ACCOUNTS);
     let client = Client::new();
 
     let response = client
-        .get(format!("http://localhost:{}", port).as_str())
+        .get(server.url())
         .basic_auth(username, Some(password))
         .send()?;
 
@@ -183,36 +134,21 @@ fn auth_multiple_accounts_pass(
         assert!(parsed.find(Text).any(|x| x.text() == file));
     }
 
-    child.kill()?;
-
     Ok(())
 }
 
 #[rstest]
-fn auth_multiple_accounts_wrong_username(tmpdir: TempDir, port: u16) -> Result<(), Error> {
-    let mut child = register_accounts(
-        Command::cargo_bin("miniserve")?
-            .arg(tmpdir.path())
-            .arg("-p")
-            .arg(port.to_string())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null()),
-    )
-    .spawn()?;
-
-    sleep(Duration::from_secs(1));
-
+fn auth_multiple_accounts_wrong_username() -> Result<(), Error> {
+    let server = server_no_stderr(ACCOUNTS);
     let client = Client::new();
 
     let status = client
-        .get(format!("http://localhost:{}", port).as_str())
+        .get(server.url())
         .basic_auth("unregistered user", Some("pwd0"))
         .send()?
         .status();
 
     assert_eq!(status, StatusCode::UNAUTHORIZED);
-
-    child.kill()?;
 
     Ok(())
 }
@@ -227,35 +163,17 @@ fn auth_multiple_accounts_wrong_username(tmpdir: TempDir, port: u16) -> Result<(
     case("usr4", "pwd1"),
     case("usr5", "pwd0")
 )]
-fn auth_multiple_accounts_wrong_password(
-    tmpdir: TempDir,
-    port: u16,
-    username: &str,
-    password: &str,
-) -> Result<(), Error> {
-    let mut child = register_accounts(
-        Command::cargo_bin("miniserve")?
-            .arg(tmpdir.path())
-            .arg("-p")
-            .arg(port.to_string())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null()),
-    )
-    .spawn()?;
-
-    sleep(Duration::from_secs(1));
-
+fn auth_multiple_accounts_wrong_password(username: &str, password: &str) -> Result<(), Error> {
+    let server = server_no_stderr(ACCOUNTS);
     let client = Client::new();
 
     let status = client
-        .get(format!("http://localhost:{}", port).as_str())
+        .get(server.url())
         .basic_auth(username, Some(password))
         .send()?
         .status();
 
     assert_eq!(status, StatusCode::UNAUTHORIZED);
-
-    child.kill()?;
 
     Ok(())
 }
