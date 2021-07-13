@@ -98,6 +98,33 @@ fn handle_multipart(
     }
 }
 
+/// Guarantee that the path is relative and cannot traverse back to parent directories
+/// and optionally prevent traversing hidden directories.
+fn sanitize_path(path: PathBuf, traverse_hidden: bool) -> Option<PathBuf> {
+    let mut buf = PathBuf::new();
+
+    for comp in path.components() {
+        match comp {
+            Component::Normal(name) => buf.push(name),
+            Component::ParentDir => {
+                buf.pop();
+            }
+            _ => (),
+        }
+    }
+
+    // Double-check that all components are Normal and check for hidden dirs
+    for comp in buf.components() {
+        match comp {
+            Component::Normal(_) if traverse_hidden => (),
+            Component::Normal(name) if !name.to_str()?.starts_with('.') => (),
+            _ => return None,
+        }
+    }
+
+    Some(buf)
+}
+
 /// Handle incoming request to upload file.
 /// Target file path is expected as path parameter in URI and is interpreted as relative from
 /// server root directory. Any path which will go outside of this directory is considered
@@ -123,13 +150,32 @@ pub fn upload_file(
 
     let query_params = listing::extract_query_parameters(&req);
     let upload_path = match query_params.path.clone() {
-        Some(path) => match path.strip_prefix(Component::RootDir) {
-            Ok(stripped_path) => stripped_path.to_owned(),
-            Err(_) => path.clone(),
-        },
+        Some(path) => path,
         None => {
             let err = ContextualError::InvalidHttpRequestError(
                 "Missing query parameter 'path'".to_string(),
+            );
+            return Box::pin(create_error_response(
+                &err.to_string(),
+                StatusCode::BAD_REQUEST,
+                &return_path,
+                query_params.sort,
+                query_params.order,
+                uses_random_route,
+                &favicon_route,
+                &css_route,
+                default_color_scheme,
+                default_color_scheme_dark,
+                hide_version_footer,
+            ));
+        }
+    };
+
+    let upload_path = match sanitize_path(upload_path, conf.show_hidden) {
+        Some(path) => path,
+        None => {
+            let err = ContextualError::InvalidHttpRequestError(
+                "Invalid value for 'path' parameter".to_string(),
             );
             return Box::pin(create_error_response(
                 &err.to_string(),
@@ -170,8 +216,9 @@ pub fn upload_file(
         }
     };
 
-    // If the target path is under the app root directory, save the file.
+    // if no_symlinks, make sure the target dir is under the app root directory
     let target_dir = match &app_root_dir.join(upload_path).canonicalize() {
+        Ok(path) if !conf.no_symlinks => path.clone(),
         Ok(path) if path.starts_with(&app_root_dir) => path.clone(),
         _ => {
             let err = ContextualError::InvalidHttpRequestError(
